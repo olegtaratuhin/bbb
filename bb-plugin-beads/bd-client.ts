@@ -6,6 +6,7 @@
 
 import { spawn } from "node:child_process";
 import type { SpawnOptions } from "node:child_process";
+import { analyze } from "./query-core";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -407,7 +408,16 @@ export function queryIssuesArgs(
   expression: string,
   filters?: { status?: string; priority?: string },
 ): string[] {
-  const clauses = [`(${validateText(expression, "Query")})`];
+  const normalizedExpression = validateText(expression, "Query");
+  const invalidDiagnostic = analyze(normalizedExpression).diagnostics.find(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (invalidDiagnostic) {
+    throw new Error(
+      `Invalid Beads query: ${invalidDiagnostic.message} (at ${invalidDiagnostic.from})`,
+    );
+  }
+  const clauses = [`(${normalizedExpression})`];
   if (filters?.status && filters.status !== "all") {
     clauses.push(`status=${filters.status}`);
   }

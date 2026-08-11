@@ -17,6 +17,7 @@ import {
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
+import { analyze, completions, highlights, type CompletionItem, type HighlightSpan } from "./query-core";
 import {
   buildDependencyEdges,
   GRAPH_NODE_HEIGHT,
@@ -188,19 +189,152 @@ function issueMatches(issue: Issue, query: string) {
     .includes(normalizedQuery);
 }
 
-const QUERY_FIELD_PATTERN =
-  /\b(?:status|priority|type|assignee|owner|label|title|description|notes|created|updated|started|closed|id|spec|pinned|ephemeral|template|parent|mol_type)\s*(?:!=|>=|<=|=|>|<)\s*[^\s()]+/i;
+function hasQuerySyntax(analysis: ReturnType<typeof analyze>) {
+  return analysis.tokens.some((token) =>
+    [
+      "equals",
+      "not-equals",
+      "less",
+      "less-equals",
+      "greater",
+      "greater-equals",
+      "and",
+      "or",
+      "not",
+      "left-paren",
+      "right-paren",
+    ].includes(token.kind),
+  );
+}
 
-function isBeadsQuery(value: string) {
-  const query = value.trim();
-  if (
-    !query ||
-    /(?:AND|OR|NOT)\s*$/i.test(query) ||
-    /(?:!=|>=|<=|=|>|<)\s*$/i.test(query)
-  ) {
-    return false;
+const HIGHLIGHT_CLASSES: Record<HighlightSpan["kind"], string> = {
+  field: "text-sky-600 dark:text-sky-400",
+  operator: "text-violet-600 dark:text-violet-400",
+  keyword: "font-semibold text-amber-600 dark:text-amber-400",
+  string: "text-emerald-600 dark:text-emerald-400",
+  number: "text-orange-600 dark:text-orange-400",
+  duration: "text-orange-600 dark:text-orange-400",
+  date: "text-orange-600 dark:text-orange-400",
+  identifier: "text-foreground",
+  punctuation: "text-muted-foreground",
+  invalid: "underline decoration-destructive decoration-wavy text-destructive",
+};
+
+function QueryInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
+  const [cursor, setCursor] = useState(value.length);
+  const analysis = useMemo(() => analyze(value), [value]);
+  const queryMode = hasQuerySyntax(analysis);
+  const queryHighlights = useMemo(
+    () => (queryMode ? highlights(value) : []),
+    [queryMode, value],
+  );
+  const suggestions = useMemo(
+    () => (focused ? completions(value, cursor).slice(0, 8) : []),
+    [cursor, focused, value],
+  );
+  const diagnostics = queryMode
+    ? analysis.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+    : [];
+
+  function updateCursor() {
+    setCursor(inputRef.current?.selectionStart ?? value.length);
   }
-  return QUERY_FIELD_PATTERN.test(query);
+
+  function acceptSuggestion(item: CompletionItem) {
+    const nextValue = `${value.slice(0, item.replacement.from)}${item.insertText}${value.slice(item.replacement.to)}`;
+    const nextCursor = item.replacement.from + item.insertText.length;
+    onChange(nextValue);
+    setCursor(nextCursor);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  }
+
+  let highlightedOffset = 0;
+  const highlightedContent: ReactNode[] = [];
+  for (const [index, span] of queryHighlights.entries()) {
+    if (span.from > highlightedOffset) {
+      highlightedContent.push(
+        <span key={`gap-${index}`}>{value.slice(highlightedOffset, span.from)}</span>,
+      );
+    }
+    highlightedContent.push(
+      <span key={`${span.from}-${span.to}`} className={HIGHLIGHT_CLASSES[span.kind]}>
+        {value.slice(span.from, span.to)}
+      </span>,
+    );
+    highlightedOffset = span.to;
+  }
+  if (highlightedOffset < value.length) {
+    highlightedContent.push(<span key="tail">{value.slice(highlightedOffset)}</span>);
+  }
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      {queryMode ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[1] flex items-center overflow-hidden whitespace-pre px-3 py-1 text-sm"
+        >
+          {highlightedContent}
+        </div>
+      ) : null}
+      <Input
+        ref={inputRef}
+        aria-label="Search Beads issues"
+        aria-describedby={diagnostics.length > 0 ? "beads-query-diagnostics" : undefined}
+        placeholder="Search issues or query"
+        value={value}
+        onFocus={() => {
+          setFocused(true);
+          updateCursor();
+        }}
+        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+        onClick={updateCursor}
+        onKeyUp={updateCursor}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setCursor(event.target.selectionStart ?? event.target.value.length);
+        }}
+        className={`h-8 min-w-0 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
+      />
+      {focused && suggestions.length > 0 ? (
+        <div
+          role="listbox"
+          aria-label="Beads query completions"
+          className="absolute left-0 right-0 top-9 z-30 grid max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md"
+        >
+          {suggestions.map((item) => (
+            <button
+              key={`${item.kind}-${item.label}`}
+              type="button"
+              role="option"
+              className="flex items-center justify-between gap-3 rounded px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => acceptSuggestion(item)}
+            >
+              <span>{item.label}</span>
+              {item.detail ? <span className="text-muted-foreground">{item.detail}</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {diagnostics.length > 0 ? (
+        <div id="beads-query-diagnostics" className="mt-1 truncate text-[11px] text-destructive" role="alert">
+          {diagnostics[0]?.message}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function StatusIcon({
@@ -1979,7 +2113,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     : null;
 
   const detailOpen = selectedId !== null;
-  const beadsQuery = isBeadsQuery(query) ? query.trim() : "";
+  const queryAnalysis = useMemo(() => analyze(query), [query]);
+  const queryMode = hasQuerySyntax(queryAnalysis);
+  const queryDiagnostics = queryMode
+    ? queryAnalysis.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+    : [];
+  const beadsQuery = queryMode && queryDiagnostics.length === 0 ? query.trim() : "";
 
   useEffect(() => {
     const refreshRootProject = () => {
@@ -1994,6 +2133,11 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }, []);
 
   async function loadIssues() {
+    if (queryMode && queryDiagnostics.length > 0) {
+      setIssues([]);
+      setError(null);
+      return;
+    }
     if (!rpcProjectId && !workspacePathOverride) {
       setIssues([]);
       return;
@@ -2031,7 +2175,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   useEffect(() => {
     void loadIssues();
-  }, [rpcProjectId, refresh, workspacePathOverride, beadsQuery]);
+  }, [beadsQuery, queryDiagnostics.length, queryMode, refresh, rpcProjectId, workspacePathOverride]);
 
   useEffect(() => {
     void loadDetail();
@@ -2071,13 +2215,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
         : statusFiltered.filter((issue) =>
             selectedPriorities.includes(issue.priority ?? 2),
           );
-    const textFiltered = beadsQuery
-      ? priorityFiltered
+    const textFiltered = queryMode
+      ? beadsQuery
+        ? priorityFiltered
+        : []
       : priorityFiltered.filter((issue) => issueMatches(issue, query));
     return sortIssues(textFiltered, sortMode);
   }, [
     beadsQuery,
     query,
+    queryMode,
     selectedPriorities,
     selectedStatuses,
     scopedIssues,
@@ -2355,13 +2502,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
           <div className="mt-1 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
               <div className="flex min-w-[12rem] flex-1 @md:max-w-[28rem]">
-                <Input
-                  aria-label="Search Beads issues"
-                  placeholder="Search issues or query"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className="h-8 min-w-0 focus-visible:border-ring focus-visible:ring-0"
-                />
+                <QueryInput value={query} onChange={setQuery} />
               </div>
               <FilterChip
                 icon="Circle"

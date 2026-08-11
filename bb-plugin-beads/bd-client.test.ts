@@ -321,6 +321,12 @@ describe("queryIssuesArgs", () => {
   it("rejects an empty expression", () => {
     expect(() => queryIssuesArgs("  ")).toThrow("Query must be a non-empty string");
   });
+
+  it("rejects recognized invalid query syntax before invoking bd", () => {
+    expect(() => queryIssuesArgs("status=unknown")).toThrow(
+      "Invalid Beads query: Choose one of",
+    );
+  });
 });
 
 describe("showIssueArgs", () => {
