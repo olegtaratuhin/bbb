@@ -1695,6 +1695,22 @@ function CreateIssueDialog({
   );
 }
 
+function IssueDetailMeta({ issue }: { issue: Issue }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}
+      >
+        {statusLabel(issue.status)}
+      </span>
+      <span className="text-xs text-muted-foreground">{issue.id}</span>
+      <AgentBadge issue={issue} showLabel />
+      <AuthorBadge issue={issue} showLabel />
+    </div>
+  );
+}
+
 function IssueDetailsContent({
   issue,
   onUpdate,
@@ -1780,28 +1796,19 @@ function IssueDetailsContent({
 
   return (
     <div className="h-full overflow-y-auto px-1">
-        <div className="mb-4 flex items-center gap-2">
-          <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
-          <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
-            {statusLabel(issue.status)}
-          </span>
-          <span className="text-xs text-muted-foreground">{issue.id}</span>
-          <AgentBadge issue={issue} showLabel />
-          <AuthorBadge issue={issue} showLabel />
+      <div className="mb-4 rounded-md bg-muted/30 p-4">
+        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Description
         </div>
-        <div className="mb-4 rounded-md bg-muted/30 p-4">
-          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Description
-          </div>
-          {issue.description ? (
-            <Markdown
-              content={issue.description}
-              className="m-0 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
-            />
-          ) : (
-            <span className="text-muted-foreground">No description.</span>
-          )}
-        </div>
+        {issue.description ? (
+          <Markdown
+            content={issue.description}
+            className="m-0 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
+          />
+        ) : (
+          <span className="text-muted-foreground">No description.</span>
+        )}
+      </div>
       {isContainerIssue(issue) && childIssueCount > 0 ? (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-border bg-card p-4">
           <div className="min-w-0">
@@ -2498,13 +2505,18 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <Dialog open={detailOpen} onOpenChange={(open) => !open && closeDetail()}>
         <DialogContent className="max-h-[85vh] max-w-2xl gap-0 overflow-hidden p-0">
           <div className="overflow-hidden">
-            <DialogHeader className="px-6 pt-6 pb-3">
+            <DialogHeader className="space-y-0 px-6 py-4">
               <DialogTitle className="truncate">
                 {detail ? detail.title : "Loading…"}
               </DialogTitle>
               <DialogDescription className="sr-only">
                 Issue detail and edit form
               </DialogDescription>
+              {detail ? (
+                <div className="mt-3">
+                  <IssueDetailMeta issue={detail} />
+                </div>
+              ) : null}
             </DialogHeader>
           </div>
           {detail ? (
