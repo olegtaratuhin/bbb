@@ -98,4 +98,11 @@ describe("layoutDependencyGraph", () => {
     expect(positions.get("B")?.x).toBe(112);
     expect(positions.get("A")?.x).toBe(positions.get("B")?.x);
   });
+
+  it("keeps isolated issues visible, including closed ones", () => {
+    const closedIssue = { ...issue("closed"), status: "closed" };
+    const layout = layoutDependencyGraph([closedIssue], []);
+
+    expect(layout.nodes.map((node) => node.issue.id)).toEqual(["closed"]);
+  });
 });

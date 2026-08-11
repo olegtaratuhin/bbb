@@ -96,14 +96,10 @@ export function layoutDependencyGraph(
   edges: readonly DependencyEdge[],
   orientation: GraphOrientation = "horizontal",
 ): DependencyGraphLayout {
-  const nodeIds = new Set<string>();
-  for (const edge of edges) {
-    nodeIds.add(edge.fromId);
-    nodeIds.add(edge.toId);
-  }
-  const graphIssues = issues
-    .filter((issue) => nodeIds.has(issue.id))
-    .sort((a, b) => a.id.localeCompare(b.id));
+  // Keep isolated issues visible as nodes too. The graph still draws only
+  // actual relationships, but a card should not disappear merely because it
+  // has no dependency edge (which is especially easy to miss for closed work).
+  const graphIssues = [...issues].sort((a, b) => a.id.localeCompare(b.id));
   const levels = new Map(graphIssues.map((issue) => [issue.id, 0]));
 
   // Longest-path layering keeps blockers and parents before their dependents.
