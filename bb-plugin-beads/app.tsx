@@ -45,8 +45,50 @@ const STATUSES = [
 const ISSUE_TYPES = ["task", "bug", "feature", "chore", "epic"];
 type IssueStatus = (typeof STATUSES)[number];
 
+type ViewMode = "kanban" | "list";
+
+const STATUS_CONFIG: Record<
+  IssueStatus,
+  { label: string; dot: string; badge: string; header: string }
+> = {
+  open: {
+    label: "Open",
+    dot: "bg-sky-500",
+    badge: "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800",
+    header: "border-t-sky-500",
+  },
+  in_progress: {
+    label: "In Progress",
+    dot: "bg-amber-500",
+    badge: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+    header: "border-t-amber-500",
+  },
+  blocked: {
+    label: "Blocked",
+    dot: "bg-red-500",
+    badge: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800",
+    header: "border-t-red-500",
+  },
+  deferred: {
+    label: "Deferred",
+    dot: "bg-zinc-400",
+    badge: "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-900/60 dark:text-zinc-300 dark:border-zinc-700",
+    header: "border-t-zinc-400",
+  },
+  closed: {
+    label: "Closed",
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
+    header: "border-t-emerald-500",
+  },
+};
+
 function statusLabel(status: string | undefined) {
-  return status?.replaceAll("_", " ") ?? "unknown";
+  return STATUS_CONFIG[status as IssueStatus]?.label ?? "unknown";
+}
+
+function statusBadgeClass(status: string | undefined) {
+  return STATUS_CONFIG[status as IssueStatus]?.badge ?? "bg-muted text-muted-foreground border-border";
 }
 
 function issueMatches(issue: Issue, query: string) {
@@ -63,20 +105,100 @@ function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
   return (
     <button
       type="button"
-      className="flex w-full cursor-pointer items-start justify-between gap-4 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       onClick={onOpen}
     >
       <span className="min-w-0">
         <span className="block truncate text-xs text-muted-foreground">
           {issue.id}
         </span>
-        <span className="mt-1 block truncate font-medium">{issue.title}</span>
+        <span className="mt-0.5 block truncate font-medium">{issue.title}</span>
       </span>
-      <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-        <span className="capitalize">{statusLabel(issue.status)}</span>
-        <span>P{issue.priority ?? 2}</span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[issue.status as IssueStatus]?.dot ?? "bg-muted-foreground"}`} />
+          {statusLabel(issue.status)}
+        </span>
+        <span className="text-xs text-muted-foreground">P{issue.priority ?? 2}</span>
       </span>
     </button>
+  );
+}
+
+function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      className="w-full cursor-pointer rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      onClick={onOpen}
+    >
+      <span className="mb-1 block truncate text-xs text-muted-foreground">
+        {issue.id}
+      </span>
+      <span className="mb-2 block line-clamp-2 text-sm font-medium">
+        {issue.title}
+      </span>
+      <span className="flex items-center gap-2">
+        <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[issue.status as IssueStatus]?.dot ?? "bg-muted-foreground"}`} />
+          {statusLabel(issue.status)}
+        </span>
+        <span className="text-xs text-muted-foreground">P{issue.priority ?? 2}</span>
+      </span>
+    </button>
+  );
+}
+
+function KanbanBoard({
+  issues,
+  onOpenIssue,
+  visibleColumns,
+}: {
+  issues: Issue[];
+  onOpenIssue: (issue: Issue) => void;
+  visibleColumns: readonly IssueStatus[];
+}) {
+  const columns = useMemo(() => {
+    const map = new Map<IssueStatus, Issue[]>();
+    visibleColumns.forEach((s) => map.set(s, []));
+    issues.forEach((issue) => {
+      const bucket = issue.status as IssueStatus;
+      if (map.has(bucket)) {
+        map.get(bucket)!.push(issue);
+      }
+    });
+    return map;
+  }, [issues, visibleColumns]);
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-2">
+      {visibleColumns.map((status) => {
+        const colIssues = columns.get(status) ?? [];
+        const config = STATUS_CONFIG[status];
+        return (
+          <div key={status} className="flex min-w-[18rem] flex-1 flex-col gap-2">
+            <div className={`rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide border-t-2 ${config.header}`}>
+              <span className="flex items-center gap-2">
+                <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+                {config.label}
+              </span>
+              <span className="ml-1 text-muted-foreground">
+                ({colIssues.length})
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {colIssues.map((issue) => (
+                <IssueCard
+                  key={issue.id}
+                  issue={issue}
+                  onOpen={() => onOpenIssue(issue)}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -210,7 +332,7 @@ function CreateIssueDialog({
   );
 }
 
-function IssueDetails({
+function IssueDetailsContent({
   issue,
   onUpdate,
 }: {
@@ -256,14 +378,29 @@ function IssueDetails({
     }
   }
 
+  const statusCfg = STATUS_CONFIG[issue.status as IssueStatus];
+
   return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{issue.id}</CardDescription>
-        <CardTitle>{issue.title}</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 text-sm">
-        <div className="grid grid-cols-2 gap-3">
+    <div className="h-full overflow-y-auto px-1">
+        <div className="mb-4 flex items-center gap-2">
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${statusCfg?.dot ?? "bg-muted-foreground"}`} />
+          <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
+            {statusLabel(issue.status)}
+          </span>
+          <span className="text-xs text-muted-foreground">{issue.id}</span>
+        </div>
+        <div className="mb-4 rounded-md bg-muted/30 p-3">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Description
+          </div>
+          {issue.description ? (
+            <Markdown content={issue.description} />
+          ) : (
+            <span className="text-muted-foreground">No description.</span>
+          )}
+        </div>
+      <div className="mt-4 border-t border-border bg-card p-4">
+        <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
           <label className="grid gap-2">
             Status
             <select
@@ -299,33 +436,23 @@ function IssueDetails({
             </select>
           </label>
         </div>
-        <div className="rounded-md bg-muted/30 p-3">
-          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Description
-          </div>
-          {issue.description ? (
-            <Markdown content={issue.description} />
-          ) : (
-            <span className="text-muted-foreground">No description.</span>
-          )}
-        </div>
         <form className="grid gap-3" onSubmit={saveText}>
-          <label className="grid gap-2">
+          <label className="grid gap-2 text-sm">
             Title
             <Input value={title} onChange={(event) => setTitle(event.target.value)} />
           </label>
-          <label className="grid gap-2">
+          <label className="grid gap-2 text-sm">
             Description
             <textarea
-              className="min-h-24 rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="min-h-20 rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
           </label>
-          <label className="grid gap-2">
+          <label className="grid gap-2 text-sm">
             Acceptance criteria
             <textarea
-              className="min-h-20 rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="min-h-16 rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
               value={acceptance}
               onChange={(event) => setAcceptance(event.target.value)}
             />
@@ -334,8 +461,8 @@ function IssueDetails({
             {saving ? "Saving…" : "Save text"}
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -353,6 +480,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
       typeof window === "undefined" ? undefined : window.localStorage,
@@ -376,6 +504,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const selectedId = subPath.startsWith("issue/")
     ? decodeURIComponent(subPath.slice("issue/".length))
     : null;
+
+  const detailOpen = selectedId !== null;
 
   useEffect(() => {
     const refreshRootProject = () => {
@@ -438,6 +568,17 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     [issues, query],
   );
 
+  function openIssue(issue: Issue) {
+    navigate.toPluginPanel("board", {
+      subPath: `issue/${encodeURIComponent(issue.id)}`,
+    });
+  }
+
+  function closeDetail() {
+    setDetail(null);
+    navigate.toPluginPanel("board", { subPath: "", replace: true });
+  }
+
   async function createIssue(input: {
     title: string;
     type: string;
@@ -486,6 +627,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     }
   }
 
+  // Determine which columns to show based on status filter
+  const visibleColumns = useMemo(() => {
+    if (status === "all") return STATUSES;
+    const filtered = status as IssueStatus;
+    return STATUSES.includes(filtered) ? [filtered] : STATUSES;
+  }, [status]);
+
   if (settingsLoading) {
     return (
       <div className="h-full overflow-y-auto p-4">
@@ -515,82 +663,149 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4">
-      <div className="mx-auto grid max-w-5xl gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold">Beads</h1>
-            <p className="text-sm text-muted-foreground">
-              {workspacePathOverride
-                ? `Workspace override: ${workspacePathOverride}`
-                : "Project issues backed by the local bd CLI."}
-            </p>
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border p-4">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-semibold">Beads</h1>
+              <p className="text-sm text-muted-foreground">
+                {workspacePathOverride
+                  ? `Workspace override: ${workspacePathOverride}`
+                  : "Project issues backed by the local bd CLI."}
+              </p>
+            </div>
+            <CreateIssueDialog
+              open={createOpen}
+              onOpenChange={setCreateOpen}
+              onCreate={createIssue}
+            />
           </div>
-          <CreateIssueDialog
-            open={createOpen}
-            onOpenChange={setCreateOpen}
-            onCreate={createIssue}
-          />
-        </div>
-        {error ? <ErrorCard message={error} /> : null}
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
-          <Input
-            aria-label="Search Beads issues"
-            placeholder="Search issues"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <select
-            aria-label="Filter by status"
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-          >
-            <option value="all">All statuses</option>
-            {STATUSES.map((option) => (
-              <option key={option} value={option}>
-                {statusLabel(option)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{loading ? "Loading…" : `${visibleIssues.length} issues`}</span>
-            <Button variant="ghost" size="sm" onClick={() => setRefresh((value) => value + 1)}>
-              Refresh
-            </Button>
-          </div>
-          {visibleIssues.length > 0 ? (
-            visibleIssues.map((issue) => (
-              <IssueRow
-                key={issue.id}
-                issue={issue}
-                onOpen={() =>
-                  navigate.toPluginPanel("board", {
-                    subPath: `issue/${encodeURIComponent(issue.id)}`,
-                  })
-                }
+          {error ? <ErrorCard message={error} /> : null}
+          {/* Toolbar: search, status filter, view toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-1 gap-2 sm:flex-none sm:grid sm:grid-cols-[minmax(0,1fr)_10rem]">
+              <Input
+                aria-label="Search Beads issues"
+                placeholder="Search issues"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
               />
-            ))
-          ) : (
+              <select
+                aria-label="Filter by status"
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+              >
+                <option value="all">All statuses</option>
+                {STATUSES.map((option) => (
+                  <option key={option} value={option}>
+                    {statusLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex overflow-hidden rounded-md border border-border"
+                role="group"
+                aria-label="Beads view"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "kanban" ? "secondary" : "ghost"}
+                  onClick={() => setViewMode("kanban")}
+                  aria-pressed={viewMode === "kanban"}
+                  aria-label="Kanban board view"
+                >
+                  Kanban
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "list" ? "secondary" : "ghost"}
+                  className="rounded-none border-l border-border"
+                  onClick={() => setViewMode("list")}
+                  aria-pressed={viewMode === "list"}
+                  aria-label="List view"
+                >
+                  List
+                </Button>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {loading ? "Loading…" : `${visibleIssues.length} issues`}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setRefresh((value) => value + 1)}
+              >
+                Refresh
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content area */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="mx-auto max-w-7xl">
+          {loading && visibleIssues.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                {loading ? "Loading issues…" : "No issues match this view."}
+                Loading issues…
               </CardContent>
             </Card>
+          ) : visibleIssues.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No issues match this view.
+              </CardContent>
+            </Card>
+          ) : viewMode === "kanban" ? (
+            <KanbanBoard
+              issues={visibleIssues}
+              onOpenIssue={openIssue}
+              visibleColumns={visibleColumns}
+            />
+          ) : (
+            <div className="grid gap-2">
+              {visibleIssues.map((issue) => (
+                <IssueRow
+                  key={issue.id}
+                  issue={issue}
+                  onOpen={() => openIssue(issue)}
+                />
+              ))}
+            </div>
           )}
         </div>
-        {detail ? (
-          <IssueDetails issue={detail} onUpdate={updateIssue} />
-        ) : selectedId && !error ? (
-          <Card>
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              Loading issue…
-            </CardContent>
-          </Card>
-        ) : null}
       </div>
+
+      {/* Detail Dialog */}
+      <Dialog open={detailOpen} onOpenChange={(open) => !open && closeDetail()}>
+        <DialogContent className="max-h-[85vh] max-w-2xl gap-0 overflow-hidden p-0">
+          <div className="overflow-hidden">
+            <DialogHeader className="px-6 pt-6 pb-3">
+              <DialogTitle className="truncate">
+                {detail ? detail.title : "Loading…"}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                Issue detail and edit form
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          {detail ? (
+            <div className="h-[min(70vh,32rem)] overflow-hidden sm:h-[calc(85vh-5rem)]">
+              <IssueDetailsContent issue={detail} onUpdate={updateIssue} />
+            </div>
+          ) : (
+            <div className="p-6 text-sm text-muted-foreground">Loading issue…</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
