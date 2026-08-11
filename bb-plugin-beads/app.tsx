@@ -854,10 +854,12 @@ function EpicNavigationRail({
   issues,
   selectedEpicId,
   onSelectEpic,
+  onNewEpic,
 }: {
   issues: Issue[];
   selectedEpicId: string | null;
   onSelectEpic: (id: string) => void;
+  onNewEpic: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<IssueStatus[]>([]);
@@ -908,6 +910,15 @@ function EpicNavigationRail({
           {visibleProgress.length} / {progress.length}
         </span>
       </div>
+      <Button
+        type="button"
+        size="sm"
+        className="mb-3 w-full justify-start"
+        onClick={onNewEpic}
+      >
+        <Icon name="Plus" className="h-4 w-4" aria-hidden="true" />
+        New epic
+      </Button>
       <div className="grid gap-2">
         <Input
           aria-label="Search epics"
@@ -1148,9 +1159,11 @@ function CreateIssueDialog({
   open,
   onOpenChange,
   onCreate,
+  initialType = "task",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialType?: string;
   onCreate: (input: {
     title: string;
     type: string;
@@ -1163,6 +1176,10 @@ function CreateIssueDialog({
   const [priority, setPriority] = useState("2");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setType(initialType);
+  }, [initialType, open]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1197,7 +1214,9 @@ function CreateIssueDialog({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Beads issue</DialogTitle>
+          <DialogTitle>
+            {type === "epic" ? "Create Beads epic" : "Create Beads issue"}
+          </DialogTitle>
           <DialogDescription>
             Add a tracked issue to the selected project.
           </DialogDescription>
@@ -1209,7 +1228,9 @@ function CreateIssueDialog({
               autoFocus
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="What needs to be done?"
+              placeholder={
+                type === "epic" ? "What should this epic accomplish?" : "What needs to be done?"
+              }
             />
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -1438,6 +1459,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createType, setCreateType] = useState("task");
   const [refresh, setRefresh] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [epicScopeId, setEpicScopeId] = useState<string | null>(null);
@@ -1586,6 +1608,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setViewMode("epics");
   }
 
+  function startNewEpic() {
+    setCreateType("epic");
+    setCreateOpen(true);
+  }
+
+  function handleCreateOpenChange(open: boolean) {
+    setCreateOpen(open);
+    if (!open) setCreateType("task");
+  }
+
   function returnToEpicProgress() {
     setEpicScopeId(null);
     setEpicRailOpen(true);
@@ -1703,7 +1735,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             </Button>
             <CreateIssueDialog
               open={createOpen}
-              onOpenChange={setCreateOpen}
+              onOpenChange={handleCreateOpenChange}
+              initialType={createType}
               onCreate={createIssue}
             />
             <div className="flex min-w-0 flex-1 @md:max-w-[28rem]">
@@ -1912,6 +1945,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             issues={issues}
             selectedEpicId={epicScopeId}
             onSelectEpic={openEpicFromRail}
+            onNewEpic={startNewEpic}
           />
         ) : null}
       </div>
