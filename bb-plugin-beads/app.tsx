@@ -419,15 +419,36 @@ function FilterOption({
   );
 }
 
-const KNOWN_AGENT_NAMES: Record<string, string> = {
-  codex: "Codex",
-  junie: "Junie",
+const KNOWN_AGENT_CONFIG: Record<
+  string,
+  { name: string; icon: IconName }
+> = {
+  codex: { name: "Codex", icon: "AiContentGenerator01" },
+  junie: { name: "Junie", icon: "Brain" },
 };
 
-function identityDisplayName(identity: string) {
+function identityLocalPart(identity: string) {
   const at = identity.indexOf("@");
-  const localPart = identity.slice(0, at > 0 ? at : identity.length);
-  return KNOWN_AGENT_NAMES[localPart.toLowerCase()] ?? localPart;
+  return identity.slice(0, at > 0 ? at : identity.length).trim();
+}
+
+function identityShortName(identity: string) {
+  const localPart = identityLocalPart(identity);
+  const words = localPart.replace(/[._-]+/g, " ").split(/\s+/).filter(Boolean);
+  if (words.length < 2) return localPart;
+  const firstName = words[0]![0]!.toUpperCase() + words[0]!.slice(1);
+  const surnameInitial = words[words.length - 1]![0]!.toUpperCase();
+  return `${firstName} ${surnameInitial}.`;
+}
+
+function identityPresentation(identity: string) {
+  const localPart = identityLocalPart(identity);
+  const agent = KNOWN_AGENT_CONFIG[localPart.toLowerCase()];
+  return {
+    name: agent?.name ?? identityShortName(identity),
+    icon: agent?.icon ?? "UserRound",
+    isAgent: Boolean(agent),
+  };
 }
 
 function IdentityBadge({
@@ -439,15 +460,16 @@ function IdentityBadge({
   label: string;
   showLabel?: boolean;
 }) {
+  const presentation = identityPresentation(identity);
   return (
     <span
-      className="inline-flex max-w-32 shrink-0 items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+      className={`group inline-flex h-6 w-6 shrink-0 items-center justify-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground sm:h-auto sm:w-auto sm:max-w-40 sm:justify-start ${presentation.isAgent ? "text-primary" : ""}`}
       title={`${label}: ${identity}`}
       aria-label={`${label}: ${identity}`}
     >
-      <Icon name="UserRound" className="h-3 w-3 shrink-0" aria-hidden="true" />
-      {showLabel ? <span className="shrink-0">{label}</span> : null}
-      <span className="truncate">{identityDisplayName(identity)}</span>
+      <Icon name={presentation.icon} className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      {showLabel ? <span className="hidden shrink-0 sm:inline">{label}</span> : null}
+      <span className="hidden truncate sm:inline">{presentation.name}</span>
     </span>
   );
 }
