@@ -232,7 +232,7 @@ function KanbanColumn({
     <details
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
-      className="group snap-start sm:flex sm:w-[15rem] sm:min-w-[15rem] sm:flex-col sm:gap-2"
+      className="group snap-start sm:flex sm:w-[13.5rem] sm:min-w-[13.5rem] sm:flex-col sm:gap-2"
     >
       <summary
         className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
