@@ -1716,16 +1716,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               />
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={viewMode === "epics" ? "secondary" : "outline"}
-                onClick={returnToEpicProgress}
-                aria-pressed={viewMode === "epics"}
-                aria-label="Epic progress view"
-              >
-                Epics
-              </Button>
               <div
                 className="flex overflow-hidden rounded-md border border-border"
                 role="group"
