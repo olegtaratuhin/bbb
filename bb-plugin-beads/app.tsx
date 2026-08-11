@@ -232,7 +232,7 @@ function KanbanColumn({
     <details
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
-      className="group snap-start sm:flex sm:w-[13.5rem] sm:min-w-[13.5rem] sm:flex-col sm:gap-2"
+      className="group snap-start sm:flex sm:w-[clamp(12rem,16vw,15rem)] sm:min-w-[clamp(12rem,16vw,15rem)] sm:flex-none sm:flex-col sm:gap-2"
     >
       <summary
         className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
@@ -274,18 +274,20 @@ function KanbanBoard({
   return (
     <>
       <div
-        className="hidden snap-x snap-mandatory gap-3 overflow-x-auto pb-2 sm:flex"
+        className="hidden overflow-x-auto pb-2 sm:block"
         role="region"
         aria-label="Kanban board"
       >
-        {visibleColumns.map((status) => (
-          <KanbanColumn
-            key={status}
-            issues={columns.get(status) ?? []}
-            onOpenIssue={onOpenIssue}
-            status={status}
-          />
-        ))}
+        <div className="mx-auto flex w-max snap-x snap-mandatory gap-3">
+          {visibleColumns.map((status) => (
+            <KanbanColumn
+              key={status}
+              issues={columns.get(status) ?? []}
+              onOpenIssue={onOpenIssue}
+              status={status}
+            />
+          ))}
+        </div>
       </div>
       <div className="flex flex-col gap-2 sm:hidden">
         {visibleColumns.map((status) => (
