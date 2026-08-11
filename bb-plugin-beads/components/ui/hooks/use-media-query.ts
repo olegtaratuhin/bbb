@@ -10,7 +10,7 @@ type MediaQueryRef = {
 const mediaQueryCache = new Map<string, MediaQueryRef>();
 
 function createMediaQueryRef(query: string): MediaQueryRef | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return null;
 
   let ref = mediaQueryCache.get(query);
   if (ref) return ref;
@@ -50,7 +50,7 @@ function subscribeMediaQuery(
 }
 
 function getMediaQuerySnapshot(query: string): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
 
   return (
     mediaQueryCache.get(query)?.mql.matches ?? window.matchMedia(query).matches

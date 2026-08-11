@@ -22,6 +22,7 @@ import {
   validateRow,
   validateRows,
   serializeRows,
+  parseSimpleFilterRows,
   // Presets
   BUILT_IN_PRESETS,
   getPreset,
@@ -548,6 +549,23 @@ describe("filter row editing lifecycle", () => {
   });
 });
 
+describe("parseSimpleFilterRows", () => {
+  it("recovers a flat query for builder editing", () => {
+    expect(parseSimpleFilterRows("status=open AND priority=1")).toEqual({
+      connector: "AND",
+      rows: [
+        { id: "query-row-1", field: "status", operator: "=", value: "open" },
+        { id: "query-row-2", field: "priority", operator: "=", value: "1" },
+      ],
+    });
+  });
+
+  it("keeps mixed-precedence expressions in raw mode", () => {
+    expect(parseSimpleFilterRows("status=open OR priority=0 AND type=bug")).toBeNull();
+    expect(parseSimpleFilterRows("NOT status=closed")).toBeNull();
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /*  5. Multiple Filters with Boolean Choices                          */
 /* ------------------------------------------------------------------ */
@@ -598,6 +616,8 @@ describe("BUILT_IN_PRESETS", () => {
     expect(names).toContain("high-priority");
     expect(names).toContain("my-issues");
     expect(names).toContain("in-progress");
+    expect(names).toContain("unassigned");
+    expect(names).toContain("recently-updated");
   });
 
   it("serializes open-issues preset", () => {

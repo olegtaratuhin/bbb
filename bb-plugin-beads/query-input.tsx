@@ -8,6 +8,7 @@ import {
 import { type CompletionItem, type HighlightSpan } from "./query-core";
 import { applyCompletion, createQueryEditorModel } from "./query-editor-model";
 import { Input } from "./components/ui/input";
+import { QueryAssist } from "./query-assist";
 
 const HIGHLIGHT_CLASSES: Record<HighlightSpan["kind"], string> = {
   field: "text-sky-600 dark:text-sky-400",
@@ -128,8 +129,20 @@ export function QueryInput({
           onChange(event.target.value);
           setCursor(event.target.selectionStart ?? event.target.value.length);
         }}
-        className={`h-8 min-w-0 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
+        className={`h-8 min-w-0 pr-10 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
       />
+      <div className="absolute right-0.5 top-1/2 z-[3] -translate-y-1/2">
+        <QueryAssist
+          query={value}
+          onQueryChange={onChange}
+          onClosed={() => {
+            inputRef.current?.focus();
+            const nextCursor = inputRef.current?.value.length ?? value.length;
+            inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+            setCursor(nextCursor);
+          }}
+        />
+      </div>
       {focused && suggestions.length > 0 ? (
         <div
           role="listbox"

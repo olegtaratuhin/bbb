@@ -13,6 +13,8 @@ import type {
   Diagnostic,
   QueryAnalysis,
   FieldDefinition,
+  ComparisonNode,
+  QueryNode,
   Span,
   ComparisonOperator,
 } from "./types";
@@ -208,8 +210,59 @@ export interface FilterRow {
   value: string;
 }
 
+export interface SimpleFilterDraft {
+  rows: FilterRow[];
+  connector: FilterConnector;
+}
+
 /** Connector between filter rows. */
 export type FilterConnector = "AND" | "OR";
+
+function flattenSimpleQuery(
+  node: QueryNode,
+): { comparisons: ComparisonNode[]; connector: FilterConnector } | null {
+  if (node.type === "comparison") {
+    return { comparisons: [node], connector: "AND" };
+  }
+  if (node.type === "group") return flattenSimpleQuery(node.expression);
+  if (node.type !== "and" && node.type !== "or") return null;
+
+  const left = flattenSimpleQuery(node.left);
+  const right = flattenSimpleQuery(node.right);
+  const connector = node.type.toUpperCase() as FilterConnector;
+  if (!left || !right) return null;
+  if ((left.comparisons.length > 1 && left.connector !== connector) ||
+      (right.comparisons.length > 1 && right.connector !== connector)) {
+    return null;
+  }
+  return {
+    comparisons: [...left.comparisons, ...right.comparisons],
+    connector,
+  };
+}
+
+/**
+ * Recover the builder representation for a flat AND/OR comparison query.
+ * Complex NOT/mixed-precedence expressions intentionally stay in raw mode so
+ * the builder cannot lose semantics while round-tripping.
+ */
+export function parseSimpleFilterRows(source: string): SimpleFilterDraft | null {
+  const analysis = analyze(source);
+  if (analysis.diagnostics.some((diagnostic) => diagnostic.severity === "error") || !analysis.ast) {
+    return null;
+  }
+  const flattened = flattenSimpleQuery(analysis.ast);
+  if (!flattened) return null;
+  return {
+    connector: flattened.connector,
+    rows: flattened.comparisons.map((comparison, index) => createRow(
+      `query-row-${index + 1}`,
+      comparison.field,
+      comparison.operator,
+      comparison.value,
+    )),
+  };
+}
 
 /** Validation result for a filter row. */
 export interface FilterRowValidation {
@@ -507,6 +560,24 @@ export const BUILT_IN_PRESETS: readonly QueryPreset[] = [
     connector: "AND",
     rows: () => [
       createRow("ip", "status", "=", "in_progress"),
+    ],
+  },
+  {
+    name: "unassigned",
+    label: "Unassigned",
+    description: "Issues without an assignee",
+    connector: "AND",
+    rows: () => [
+      createRow("unassigned", "assignee", "=", "none"),
+    ],
+  },
+  {
+    name: "recently-updated",
+    label: "Recently Updated",
+    description: "Issues updated within the last seven days",
+    connector: "AND",
+    rows: () => [
+      createRow("recently-updated", "updated", ">", "7d"),
     ],
   },
 ];
