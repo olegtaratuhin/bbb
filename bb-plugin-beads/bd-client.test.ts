@@ -118,6 +118,82 @@ describe("normalizeIssues", () => {
     expect(result[0].dependencies).toHaveLength(1);
     expect(result[0].dependents).toEqual([]);
   });
+
+  it("omits optional fields when absent (no undefined own properties)", () => {
+    const input = { id: "bb-1", title: "Minimal" };
+    const result = normalizeIssues(input);
+    const issue = result[0];
+    // Required fields should be present
+    expect(issue.id).toBe("bb-1");
+    expect(issue.title).toBe("Minimal");
+    expect(issue.labels).toEqual([]);
+    expect(issue.dependencies).toEqual([]);
+    expect(issue.dependents).toEqual([]);
+    // Optional fields must NOT be own properties when absent
+    expect(Object.prototype.hasOwnProperty.call(issue, "description")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "status")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "priority")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "issue_type")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "assignee")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "owner")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "created_at")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "created_by")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "updated_at")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(issue, "started_at")).toBe(false);
+  });
+
+  it("preserves optional fields when present", () => {
+    const input = {
+      id: "bb-2",
+      title: "Full",
+      description: "A description",
+      status: "open",
+      priority: 3,
+      issue_type: "bug",
+      assignee: "alice",
+      owner: "bob",
+      created_at: "2024-01-01",
+      created_by: "charlie",
+      updated_at: "2024-01-02",
+      started_at: "2024-01-03",
+      labels: ["urgent"],
+      dependencies: ["bb-1"],
+      dependents: [],
+    };
+    const result = normalizeIssues(input);
+    const issue = result[0];
+    expect(issue.description).toBe("A description");
+    expect(issue.status).toBe("open");
+    expect(issue.priority).toBe(3);
+    expect(issue.issue_type).toBe("bug");
+    expect(issue.assignee).toBe("alice");
+    expect(issue.owner).toBe("bob");
+    expect(issue.created_at).toBe("2024-01-01");
+    expect(issue.created_by).toBe("charlie");
+    expect(issue.updated_at).toBe("2024-01-02");
+    expect(issue.started_at).toBe("2024-01-03");
+    expect(issue.labels).toEqual(["urgent"]);
+    expect(issue.dependencies).toEqual(["bb-1"]);
+  });
+
+  it("preserves present empty string fields", () => {
+    const issue = normalizeIssues({ id: "bb-4", title: "Empty", status: "" })[0];
+    expect(issue.status).toBe("");
+    expect(Object.prototype.hasOwnProperty.call(issue, "status")).toBe(true);
+  });
+
+  it("omits extra fields with undefined values", () => {
+    const input = {
+      id: "bb-3",
+      title: "Extra",
+      customDefined: "present",
+      customUndefined: undefined,
+    };
+    const result = normalizeIssues(input);
+    const issue = result[0];
+    expect(issue.customDefined).toBe("present");
+    expect(Object.prototype.hasOwnProperty.call(issue, "customUndefined")).toBe(false);
+  });
 });
 
 // ── Command Argument Builders ─────────────────────────────────────────────────

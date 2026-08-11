@@ -165,25 +165,34 @@ export function normalizeIssues(value: unknown): Issue[] {
     const issue: Issue = {
       id: (record.id as string) ?? "",
       title: (record.title as string) ?? "",
-      description: record.description ? (record.description as string) : undefined,
-      status: record.status ? (record.status as string) : undefined,
-      priority: typeof record.priority === "number" ? record.priority : undefined,
-      issue_type: record.issue_type ? (record.issue_type as string) : undefined,
-      assignee: record.assignee ? (record.assignee as string) : undefined,
-      owner: record.owner ? (record.owner as string) : undefined,
-      created_at: record.created_at ? (record.created_at as string) : undefined,
-      created_by: record.created_by ? (record.created_by as string) : undefined,
-      updated_at: record.updated_at ? (record.updated_at as string) : undefined,
-      started_at: record.started_at ? (record.started_at as string) : undefined,
       labels: Array.isArray(record.labels) ? record.labels : [],
       dependencies: Array.isArray(record.dependencies) ? record.dependencies : [],
       dependents: Array.isArray(record.dependents) ? record.dependents : [],
     };
 
-    // Preserve any additional fields
+    // Copy optional string fields only when present (omit undefined for RPC compat)
+    const optionalStringFields: (keyof Pick<Issue, "description" | "status" | "issue_type" | "assignee" | "owner" | "created_at" | "created_by" | "updated_at" | "started_at">)[] = [
+      "description", "status", "issue_type", "assignee", "owner",
+      "created_at", "created_by", "updated_at", "started_at",
+    ];
+    for (const key of optionalStringFields) {
+      if (typeof record[key] === "string") {
+        issue[key] = record[key] as string;
+      }
+    }
+
+    // Copy optional number field only when present
+    if (typeof record.priority === "number") {
+      issue.priority = record.priority;
+    }
+
+    // Preserve any additional fields, but omit those with undefined values
     for (const key of Object.keys(record)) {
       if (!(key in issue)) {
-        issue[key] = record[key];
+        const v = record[key];
+        if (v !== undefined) {
+          issue[key] = v;
+        }
       }
     }
 
