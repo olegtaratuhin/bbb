@@ -94,7 +94,7 @@ function errorMessage(result: { kind: string; message?: string; stderr?: string;
   if (result.kind === "parse") {
     return result.error ?? "bd returned invalid JSON";
   }
-  return result.stderr?.trim() || "bd command failed";
+  return result.message ?? (result.stderr?.trim() || "bd command failed");
 }
 
 function asIssue(value: unknown): Issue {
@@ -105,7 +105,7 @@ function asIssue(value: unknown): Issue {
   return issue;
 }
 
-async function getWorkspacePath(
+async function getWorkspaceTarget(
   bb: BbPluginApi,
   settings: BeadsSettings,
   projectId?: string,
@@ -121,13 +121,16 @@ async function getWorkspacePath(
       "No BB project is selected. Open a project in BB or configure a Beads project/path override in Settings.",
     );
   }
-  if (target.kind === "path") return target.path;
+  if (target.kind === "path") return { path: target.path };
 
   const project = await bb.sdk.projects.get({ projectId: target.projectId });
   const source = selectLocalWorkspaceSource(
     project.sources as readonly ProjectSourceLike[],
   );
-  return source.path!.trim();
+  return {
+    path: source.path!.trim(),
+    ...(source.hostId !== undefined ? { hostId: source.hostId } : {}),
+  };
 }
 
 async function runProjectBd(
@@ -136,8 +139,12 @@ async function runProjectBd(
   projectId: string | undefined,
   args: readonly string[],
 ) {
-  const cwd = await getWorkspacePath(bb, settings, projectId);
-  const result = await runBdJson(args, { cwd });
+  const target = await getWorkspaceTarget(bb, settings, projectId);
+  const result = await runBdJson(args, {
+    cwd: target.path,
+    ...(target.hostId !== undefined ? { hostId: target.hostId } : {}),
+    execute: (request) => bb.hosts.execute(request),
+  });
   if (!result.ok) {
     throw new Error(errorMessage(result));
   }

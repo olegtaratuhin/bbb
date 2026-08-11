@@ -12948,6 +12948,23 @@ interface PluginSharedPortTunnelIdentity {
     /** Gate apex without a scheme, e.g. "getbb.app". */
     baseDomain: string;
 }
+interface PluginHostCommandRequest {
+    hostId?: string;
+    command: string;
+    args: readonly string[];
+    cwd: string;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+}
+interface PluginHostCommandResult {
+    status: "exited" | "spawn_error" | "timed_out" | "output_limit";
+    exitCode: number | null;
+    signal: string | null;
+    stdout: string;
+    stderr: string;
+    errorCode: string | null;
+    error: string | null;
+}
 interface PluginHosts {
     /**
      * Ensure this enrolled host has a gate label and return its read-only public
@@ -12955,6 +12972,7 @@ interface PluginHosts {
      * cannot influence either credential-bearing destination.
      */
     ensureSharedPortTunnel(hostId: string): Promise<PluginSharedPortTunnelIdentity>;
+    execute(request: PluginHostCommandRequest): Promise<PluginHostCommandResult>;
     /**
      * Replace this plugin's desired shared-loopback ports for one host. The
      * server aggregates declarations, owns generations, and delivers the

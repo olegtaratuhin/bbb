@@ -1,8 +1,8 @@
 // bd-client.ts — bounded Beads CLI adapter for bb-plugin-beads.
 //
-// Pure, testable TypeScript module.  No side effects on import.
-// Invokes the `bd` binary via `node:child_process.spawn` (shell: false)
-// and returns structured results.
+// Pure, testable TypeScript module. No side effects on import.
+// Project-backed callers inject BB's bounded host executor; the local spawn
+// path remains available for direct adapter tests and primary-host callers.
 
 import { spawn } from "node:child_process";
 import type { SpawnOptions } from "node:child_process";
@@ -45,6 +45,15 @@ export type BdOk<T = unknown> = { ok: true; value: T };
 export type BdErr =
   | { ok: false; kind: "spawn"; code: string; message: string }
   | { ok: false; kind: "exit"; code: number; stdout: string; stderr: string }
+  | {
+      ok: false;
+      kind: "transport";
+      status: "timed_out" | "output_limit";
+      code: string;
+      message: string;
+      stdout: string;
+      stderr: string;
+    }
   | { ok: false; kind: "parse"; raw: string; error: string };
 
 export type BdResult<T = unknown> = BdOk<T> | BdErr;
@@ -83,6 +92,77 @@ export function buildBdArgs(commandArgs: readonly string[]): string[] {
 
 export interface RunBdOptions {
   cwd?: string;
+  hostId?: string;
+  timeoutMs?: number;
+  execute?: (request: {
+    hostId?: string;
+    command: string;
+    args: readonly string[];
+    cwd: string;
+    timeoutMs?: number;
+  }) => Promise<{
+    status: "exited" | "spawn_error" | "timed_out" | "output_limit";
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+    errorCode: string | null;
+    error: string | null;
+  }>;
+}
+
+type BdExecutionResult = NonNullable<RunBdOptions["execute"]> extends (
+  request: never,
+) => Promise<infer TResult>
+  ? TResult
+  : never;
+
+function parseBdOutput(stdout: string, stderr: string): BdResult {
+  const raw = stdout.trim() || stderr.trim();
+  if (!raw) {
+    return { ok: false, kind: "parse", raw: "", error: "Empty output" };
+  }
+  try {
+    return { ok: true, value: JSON.parse(raw) };
+  } catch (err) {
+    return {
+      ok: false,
+      kind: "parse",
+      raw,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function resultFromHostExecution(result: BdExecutionResult): BdResult {
+  if (result.status === "spawn_error") {
+    return {
+      ok: false,
+      kind: "spawn",
+      code: result.errorCode ?? "UNKNOWN",
+      message: result.error ?? (result.stderr || "Unable to start bd"),
+    };
+  }
+  if (result.status === "timed_out" || result.status === "output_limit") {
+    return {
+      ok: false,
+      kind: "transport",
+      status: result.status,
+      code: result.errorCode ?? result.status,
+      message: result.error ?? `bd command ${result.status}`,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  }
+  if (result.exitCode !== 0) {
+    return {
+      ok: false,
+      kind: "exit",
+      code: result.exitCode ?? -1,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  }
+  return parseBdOutput(result.stdout, result.stderr);
 }
 
 /**
@@ -97,6 +177,29 @@ export function runBdJson(
     const args = buildBdArgs(commandArgs);
     const cwd = getCwd(options);
     const bin = resolveBdBin();
+
+    const execute = options?.execute;
+    if (execute) {
+      void execute({
+        ...(options.hostId !== undefined ? { hostId: options.hostId } : {}),
+        command: bin,
+        args,
+        cwd,
+        ...(options.timeoutMs !== undefined
+          ? { timeoutMs: options.timeoutMs }
+          : {}),
+      })
+        .then((result) => resolve(resultFromHostExecution(result)))
+        .catch((err) =>
+          resolve({
+            ok: false,
+            kind: "spawn",
+            code: "TRANSPORT_ERROR",
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      return;
+    }
 
     const spawnOptions: SpawnOptions = {
       cwd,
@@ -140,19 +243,7 @@ export function runBdJson(
         return;
       }
 
-      const raw = (stdout.trim() || stderr.trim()) ?? "";
-      if (!raw) {
-        resolve({ ok: false, kind: "parse", raw: "", error: "Empty output" });
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(raw);
-        resolve({ ok: true, value: parsed });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        resolve({ ok: false, kind: "parse", raw, error: message });
-      }
+      resolve(parseBdOutput(stdout, stderr));
     });
   });
 }

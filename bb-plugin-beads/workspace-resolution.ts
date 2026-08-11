@@ -33,6 +33,7 @@ export interface ProjectSourceLike {
   isDefault?: boolean;
   path?: string;
   type?: string;
+  hostId?: string;
 }
 
 /** Pick the BB project source that can be used as a local bd working directory. */

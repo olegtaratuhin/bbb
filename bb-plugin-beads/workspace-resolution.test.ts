@@ -39,9 +39,14 @@ describe("selectLocalWorkspaceSource", () => {
     expect(
       selectLocalWorkspaceSource([
         { type: "local_path", path: "/first" },
-        { type: "local_path", path: "/default", isDefault: true },
+        {
+          type: "local_path",
+          path: "/default",
+          hostId: "host-remote",
+          isDefault: true,
+        },
       ]),
-    ).toMatchObject({ path: "/default" });
+    ).toMatchObject({ path: "/default", hostId: "host-remote" });
   });
 
   it("rejects projects without a local workspace", () => {

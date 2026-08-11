@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   buildBdArgs,
   normalizeIssues,
@@ -421,6 +421,69 @@ describe("updateIssueArgs", () => {
 // ── runBdJson ────────────────────────────────────────────────────────────────
 
 describe("runBdJson", () => {
+  it("forwards argv, cwd, and host to the injected host executor", async () => {
+    const execute = vi.fn(async (request: {
+      hostId?: string;
+      command: string;
+      args: readonly string[];
+      cwd: string;
+      timeoutMs?: number;
+    }) => ({
+      status: "exited" as const,
+      exitCode: 0,
+      signal: null,
+      stdout: JSON.stringify([{ id: "bb-1", title: "remote" }]),
+      stderr: "",
+      errorCode: null,
+      error: null,
+      request,
+    }));
+
+    const result = await runBdJson(["list", "--query", "a; echo unsafe"], {
+      cwd: "/remote/workspace",
+      hostId: "host-remote",
+      timeoutMs: 45_000,
+      execute,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: [{ id: "bb-1", title: "remote" }],
+    });
+    expect(execute).toHaveBeenCalledWith({
+      hostId: "host-remote",
+      command: process.env.BEADS_BIN ?? "bd",
+      args: ["--json", "--sandbox", "list", "--query", "a; echo unsafe"],
+      cwd: "/remote/workspace",
+      timeoutMs: 45_000,
+    });
+  });
+
+  it("preserves bounded host execution failures", async () => {
+    const result = await runBdJson(["list"], {
+      cwd: "/remote/workspace",
+      execute: async () => ({
+        status: "timed_out" as const,
+        exitCode: null,
+        signal: "SIGTERM",
+        stdout: "partial",
+        stderr: "deadline",
+        errorCode: "ETIMEDOUT",
+        error: "timed out",
+      }),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      kind: "transport",
+      status: "timed_out",
+      code: "ETIMEDOUT",
+      message: "timed out",
+      stdout: "partial",
+      stderr: "deadline",
+    });
+  });
+
   it("returns structured spawn error for nonexistent binary", async () => {
     const result: BdResult = await runBdJson(["list"], {
       cwd: "/nonexistent",
