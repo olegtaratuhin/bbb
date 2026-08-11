@@ -510,6 +510,63 @@ export function serializePreset(preset: QueryPreset, context: PresetContext = {}
   return serializeRows(rows, context.connector ?? preset.connector ?? "AND");
 }
 
+export interface QueryExample {
+  name: string;
+  label: string;
+  description: string;
+  query: string;
+}
+
+/** Curated valid expressions shown to users discovering Beads query syntax. */
+export const QUERY_EXAMPLES: readonly QueryExample[] = [
+  {
+    name: "open-high-priority",
+    label: "Open high-priority work",
+    description: "Open issues with priority 0, 1, or 2",
+    query: "status=open AND priority<=2",
+  },
+  {
+    name: "bugs-or-features",
+    label: "Bugs or features",
+    description: "Find either kind of product work",
+    query: "type=bug OR type=feature",
+  },
+  {
+    name: "recently-updated",
+    label: "Recently updated",
+    description: "Issues changed within the last seven days",
+    query: "updated>7d",
+  },
+  {
+    name: "unassigned-work",
+    label: "Unassigned work",
+    description: "Issues waiting for an owner",
+    query: "assignee=none",
+  },
+];
+
+export const MAX_RECENT_QUERIES = 8;
+
+/**
+ * Add a valid non-empty query to bounded local history. Invalid and duplicate
+ * expressions are ignored; newest entries are returned first.
+ */
+export function addRecentQuery(
+  recent: readonly string[],
+  query: string,
+  limit = MAX_RECENT_QUERIES,
+): readonly string[] {
+  const normalized = query.trim();
+  if (!normalized || analyze(normalized).diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+    return [...recent].slice(0, limit);
+  }
+  return [normalized, ...recent.filter((entry) => entry !== normalized)].slice(0, Math.max(0, limit));
+}
+
+export function removeRecentQuery(recent: readonly string[], query: string): readonly string[] {
+  return recent.filter((entry) => entry !== query);
+}
+
 /** Built-in presets. */
 export const BUILT_IN_PRESETS: readonly QueryPreset[] = [
   {

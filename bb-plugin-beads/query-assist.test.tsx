@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as React from "react";
 import { QueryAssist } from "./query-assist";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  if (window.localStorage) window.localStorage.clear();
+});
 
 function renderAssist(initialQuery = "") {
   function Harness() {
@@ -81,5 +84,20 @@ describe("QueryAssist", () => {
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByTestId("query-output").textContent).toBe("(type=bug) AND (status=open)");
+  });
+
+  it("offers valid examples and records applied queries locally", () => {
+    renderAssist();
+    let dialog = openAssist();
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Examples" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Bugs or features/ }));
+
+    expect(screen.getByTestId("query-output").textContent).toBe("type=bug OR type=feature");
+
+    dialog = openAssist();
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Examples" }));
+    expect(within(dialog).getAllByText("type=bug OR type=feature").length).toBeGreaterThan(0);
+    fireEvent.click(within(dialog).getByRole("button", { name: /Remove recent query/ }));
+    expect(within(dialog).getByText("Queries you apply are kept only on this device.")).toBeTruthy();
   });
 });

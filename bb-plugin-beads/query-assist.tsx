@@ -7,7 +7,11 @@ import {
   getFieldChoices,
   getOperatorChoices,
   getValueChoices,
+  addRecentQuery,
+  MAX_RECENT_QUERIES,
   parseSimpleFilterRows,
+  QUERY_EXAMPLES,
+  removeRecentQuery,
   serializePreset,
   serializeRows,
   updateRowField,
@@ -39,7 +43,19 @@ interface QueryAssistProps {
 }
 
 type ApplyMode = "replace" | "compose";
-type AssistTab = "presets" | "builder";
+type AssistTab = "presets" | "builder" | "examples";
+
+const RECENT_QUERY_STORAGE_KEY = "bb-beads:recent-query-history";
+
+function readRecentQueries(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(RECENT_QUERY_STORAGE_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string").slice(0, MAX_RECENT_QUERIES) : [];
+  } catch {
+    return [];
+  }
+}
 
 function firstError(rows: readonly FilterRow[]): string | undefined {
   return validateRows(rows).diagnostics[0]?.message;
@@ -57,6 +73,7 @@ export function QueryAssist({
   const [connector, setConnector] = useState<FilterConnector>("AND");
   const [rows, setRows] = useState<FilterRow[]>([createEmptyRow("builder-row-1")]);
   const [feedback, setFeedback] = useState<string>();
+  const [recentQueries, setRecentQueries] = useState<string[]>(readRecentQueries);
   const nextRowId = useRef(2);
 
   function initializeBuilder() {
@@ -93,8 +110,35 @@ export function QueryAssist({
       setFeedback(analysis.diagnostics[0]?.message ?? "Enter a valid query.");
       return;
     }
-    onQueryChange(combine(nextQuery));
+    const appliedQuery = combine(nextQuery);
+    onQueryChange(appliedQuery);
+    const nextRecentQueries = [...addRecentQuery(recentQueries, appliedQuery)];
+    setRecentQueries(nextRecentQueries);
+    try {
+      window.localStorage.setItem(RECENT_QUERY_STORAGE_KEY, JSON.stringify(nextRecentQueries));
+    } catch {
+      // Private browsing and remote clients may not expose persistent storage.
+    }
     setOpen(false);
+  }
+
+  function clearRecentQueries() {
+    setRecentQueries([]);
+    try {
+      window.localStorage.removeItem(RECENT_QUERY_STORAGE_KEY);
+    } catch {
+      // Ignore unavailable storage; the in-memory list is still cleared.
+    }
+  }
+
+  function forgetRecentQuery(recentQuery: string) {
+    const nextRecentQueries = [...removeRecentQuery(recentQueries, recentQuery)];
+    setRecentQueries(nextRecentQueries);
+    try {
+      window.localStorage.setItem(RECENT_QUERY_STORAGE_KEY, JSON.stringify(nextRecentQueries));
+    } catch {
+      // Ignore unavailable storage.
+    }
   }
 
   function applyPreset(name: string) {
@@ -162,6 +206,17 @@ export function QueryAssist({
           <Button
             type="button"
             size="sm"
+            variant={tab === "examples" ? "secondary" : "ghost"}
+            className="min-h-9 flex-1 max-md:pointer-coarse:min-h-11"
+            role="tab"
+            aria-selected={tab === "examples"}
+            onClick={() => setTab("examples")}
+          >
+            Examples
+          </Button>
+          <Button
+            type="button"
+            size="sm"
             variant={tab === "builder" ? "secondary" : "ghost"}
             className="min-h-9 flex-1 max-md:pointer-coarse:min-h-11"
             role="tab"
@@ -210,6 +265,42 @@ export function QueryAssist({
                 <Icon name="ArrowRight" className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </button>
             ))}
+          </div>
+        ) : tab === "examples" ? (
+          <div className="grid gap-3">
+            <div className="grid max-h-[min(22rem,42dvh)] gap-1.5 overflow-y-auto pr-1" role="list" aria-label="Beads query examples">
+              {QUERY_EXAMPLES.map((example) => (
+                <button
+                  key={example.name}
+                  type="button"
+                  className="flex min-h-11 items-start justify-between gap-3 rounded-md border border-border px-3 py-2 text-left hover:bg-state-hover max-md:pointer-coarse:min-h-14"
+                  onClick={() => applyQuery(example.query)}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{example.label}</span>
+                    <span className="block text-xs text-muted-foreground">{example.description}</span>
+                    <code className="mt-1 block truncate text-xs text-foreground/80">{example.query}</code>
+                  </span>
+                  <Icon name="ArrowRight" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Recent queries</span>
+                {recentQueries.length > 0 ? (
+                  <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={clearRecentQueries}>Clear history</button>
+                ) : null}
+              </div>
+              {recentQueries.length > 0 ? recentQueries.map((recentQuery) => (
+                <div key={recentQuery} className="flex min-h-10 items-center gap-1.5 rounded-md border border-border px-2 max-md:pointer-coarse:min-h-12">
+                  <button type="button" className="min-w-0 flex-1 truncate py-2 text-left text-xs hover:text-foreground" onClick={() => applyQuery(recentQuery)}>{recentQuery}</button>
+                  <button type="button" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-state-hover hover:text-foreground max-md:pointer-coarse:h-10 max-md:pointer-coarse:w-10" aria-label={`Remove recent query ${recentQuery}`} onClick={() => forgetRecentQuery(recentQuery)}>
+                    <Icon name="X" className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )) : <p className="text-xs text-muted-foreground">Queries you apply are kept only on this device.</p>}
+            </div>
           </div>
         ) : (
           <div className="grid gap-2">

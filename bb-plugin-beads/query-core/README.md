@@ -54,6 +54,11 @@ use `createEmptyRow`, `updateRowField`, `updateRowOperator`, `updateRowValue`,
 `validateRows`, and `serializeRows`; built-in query presets are exposed through
 `BUILT_IN_PRESETS` and `serializePreset`.
 
+`QUERY_EXAMPLES` contains curated valid expressions for discoverability.
+`addRecentQuery` and `removeRecentQuery` provide a bounded, local-only history
+policy (`MAX_RECENT_QUERIES` is 8): empty, invalid, and duplicate entries are
+ignored, and clients can offer an explicit clear-history action.
+
 ## Compatibility contract
 
 The compatibility authority is the upstream Beads query package:

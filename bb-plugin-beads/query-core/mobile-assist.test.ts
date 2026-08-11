@@ -23,6 +23,10 @@ import {
   validateRows,
   serializeRows,
   parseSimpleFilterRows,
+  QUERY_EXAMPLES,
+  MAX_RECENT_QUERIES,
+  addRecentQuery,
+  removeRecentQuery,
   // Presets
   BUILT_IN_PRESETS,
   getPreset,
@@ -679,6 +683,28 @@ describe("BUILT_IN_PRESETS", () => {
 
   it("getPreset returns undefined for unknown name", () => {
     expect(getPreset("nonexistent")).toBeUndefined();
+  });
+});
+
+describe("query examples and recent history", () => {
+  it("keeps every curated example valid through query-core", () => {
+    expect(QUERY_EXAMPLES.length).toBeGreaterThan(2);
+    for (const example of QUERY_EXAMPLES) {
+      expect(analyze(example.query).diagnostics, example.name).toEqual([]);
+    }
+  });
+
+  it("deduplicates, validates, and caps recent queries", () => {
+    const recent = addRecentQuery(["status=closed"], "status=open", 2);
+    expect(recent).toEqual(["status=open", "status=closed"]);
+    expect(addRecentQuery(recent, "status=open", 2)).toEqual(recent);
+    expect(addRecentQuery(recent, "status=", 2)).toEqual(recent);
+    expect(addRecentQuery(recent, "type=bug", 2)).toHaveLength(2);
+    expect(MAX_RECENT_QUERIES).toBe(8);
+  });
+
+  it("removes a selected recent query without affecting others", () => {
+    expect(removeRecentQuery(["status=open", "type=bug"], "status=open")).toEqual(["type=bug"]);
   });
 });
 
