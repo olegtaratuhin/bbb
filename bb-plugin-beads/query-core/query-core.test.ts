@@ -96,6 +96,55 @@ describe("Beads query parser and validation", () => {
       expect.objectContaining({ code: "unknown-field" }),
     ]);
   });
+
+  it("accepts the documented fields and evaluator aliases", () => {
+    const expressions = [
+      "status=open",
+      "priority=2",
+      "type=task",
+      "assignee=none",
+      "owner=alice",
+      "label=frontend",
+      "labels=frontend",
+      "title=search",
+      "description=search",
+      "desc=search",
+      "notes=search",
+      "created>7d",
+      "updated>tomorrow",
+      "started<2025-01-15",
+      "closed>=2025-01-15T10:00:00Z",
+      "id=bb-*",
+      "spec=spec-1",
+      "spec_id=spec-1",
+      "pinned=true",
+      "ephemeral=no",
+      "template=0",
+      "parent=bb-parent",
+      "mol_type=work",
+      "metadata.Release=stable",
+      "has_metadata_key=Release",
+    ];
+    for (const expression of expressions) {
+      expect(analyze(expression).diagnostics, expression).toEqual([]);
+    }
+  });
+
+  it("reports multiple independent errors with precise spans", () => {
+    const result = analyze("unknown=x AND priority=8");
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: "unknown-field", from: 0, to: 7 }),
+      expect.objectContaining({ code: "invalid-number", from: 23, to: 24 }),
+    ]);
+  });
+
+  it("reports unmatched closing groups", () => {
+    const result = parse("status=open)");
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: "unexpected-token", from: 11, to: 12 }),
+    ]);
+    expect(result.ast?.type).toBe("comparison");
+  });
 });
 
 describe("Beads query editor projections", () => {
@@ -129,5 +178,28 @@ describe("Beads query editor projections", () => {
   it("returns replacement ranges for partial tokens", () => {
     const items = complete(lex("prio").tokens, "prio", 4);
     expect(items[0]).toMatchObject({ label: "priority", replacement: { from: 0, to: 4 } });
+  });
+
+  it("completes after boolean operators and inside value prefixes", () => {
+    expect(completions("status=open AND ").map((item) => item.label)).toContain("priority");
+    expect(completions("status=op").map((item) => item.label)).toEqual(["open"]);
+    expect(completions("priority=").map((item) => item.label)).toEqual([]);
+    expect(completions("updated=to").map((item) => item.label)).toContain("today");
+  });
+
+  it("preserves source text and classifies quoted values", () => {
+    const source = 'title="fix login" AND created>2025-01-15';
+    const spans = highlights(source);
+    expect(spans.map((span) => source.slice(span.from, span.to))).toEqual([
+      "title",
+      "=",
+      '"fix login"',
+      "AND",
+      "created",
+      ">",
+      "2025-01-15",
+    ]);
+    expect(spans[2]?.kind).toBe("string");
+    expect(spans.at(-1)?.kind).toBe("date");
   });
 });

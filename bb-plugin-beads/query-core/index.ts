@@ -20,7 +20,7 @@ export function analyze(source: string): QueryAnalysis {
     source,
     tokens: lexed.tokens,
     ast: parsed.ast,
-    diagnostics: [...lexed.diagnostics, ...parsed.diagnostics, ...validate(parsed.ast)],
+    diagnostics: [...parsed.diagnostics, ...validate(parsed.ast)],
   };
 }
 

@@ -53,13 +53,15 @@ class Parser {
   parse(): QueryNode | null {
     if (this.current().kind === "eof") return null;
     const node = this.parseOr();
-    if (this.current().kind !== "eof" && this.current().kind !== "right-paren") {
+    if (this.current().kind !== "eof") {
       const token = this.current();
       this.diagnostics.push(expected(
         "unexpected-token",
-        `Unexpected ${token.raw || token.kind}; expected AND, OR, or the end of the query`,
+        token.kind === "right-paren"
+          ? "Unexpected closing parenthesis"
+          : `Unexpected ${token.raw || token.kind}; expected AND, OR, or the end of the query`,
         token,
-        ["AND", "OR"],
+        token.kind === "right-paren" ? ["expression"] : ["AND", "OR"],
       ));
       this.advance();
     }

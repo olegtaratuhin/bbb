@@ -10,11 +10,11 @@ function diagnostic(
 }
 
 function isIdentifierStart(char: string): boolean {
-  return /[\p{L}_]/u.test(char);
+  return /[\p{L}_*]/u.test(char);
 }
 
 function isIdentifierChar(char: string): boolean {
-  return /[\p{L}\p{N}_\-.:/]/u.test(char);
+  return /[\p{L}\p{N}_*\-.:/]/u.test(char);
 }
 
 function widthAt(source: string, offset: number): number {
