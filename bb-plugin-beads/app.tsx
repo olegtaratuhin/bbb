@@ -797,6 +797,9 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 ))}
               </select>
             </div>
+            <span className={ISSUE_COUNT_BADGE_CLASS}>
+              {loading ? "Loading…" : `${visibleIssues.length} issues`}
+            </span>
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <div
                 className="flex overflow-hidden rounded-md border border-border"
@@ -826,9 +829,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   List
                 </Button>
               </div>
-              <span className={ISSUE_COUNT_BADGE_CLASS}>
-                {loading ? "Loading…" : `${visibleIssues.length} issues`}
-              </span>
               <Button
                 variant="outline"
                 size="sm"
