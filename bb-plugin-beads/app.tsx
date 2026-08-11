@@ -17,7 +17,14 @@ import {
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
-import { buildDependencyEdges, type DependencyEdge } from "./dependency-graph";
+import {
+  buildDependencyEdges,
+  GRAPH_NODE_HEIGHT,
+  GRAPH_NODE_WIDTH,
+  layoutDependencyGraph,
+  type DependencyEdge,
+  type GraphOrientation,
+} from "./dependency-graph";
 import {
   buildEpicProgress,
   getDescendantWorkIssues,
@@ -786,18 +793,6 @@ const GRAPH_RELATION_LABELS: Record<GraphRelationFilter, string> = {
   related: "Related",
 };
 
-const GRAPH_NODE_WIDTH = 196;
-const GRAPH_NODE_HEIGHT = 68;
-const GRAPH_COLUMN_GAP = 52;
-const GRAPH_ROW_GAP = 24;
-
-interface GraphNodePosition {
-  issue: Issue;
-  x: number;
-  y: number;
-  layer: number;
-}
-
 function graphEdgeLabel(edge: DependencyEdge) {
   if (edge.relation === "blocking") return "Blocks";
   if (edge.relation === "hierarchy") return "Parent / child";
@@ -805,76 +800,17 @@ function graphEdgeLabel(edge: DependencyEdge) {
   return edge.type;
 }
 
-function layoutDependencyGraph(
-  issues: readonly Issue[],
-  edges: readonly DependencyEdge[],
-) {
-  const nodeIds = new Set<string>();
-  for (const edge of edges) {
-    nodeIds.add(edge.fromId);
-    nodeIds.add(edge.toId);
-  }
-  const graphIssues = issues
-    .filter((issue) => nodeIds.has(issue.id))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  const levels = new Map(graphIssues.map((issue) => [issue.id, 0]));
-
-  // Longest-path layering keeps blockers and parents to the left. The
-  // bounded passes also keep malformed/cyclic dependency data renderable.
-  for (let pass = 0; pass < graphIssues.length; pass++) {
-    let changed = false;
-    for (const edge of edges) {
-      const nextLevel = (levels.get(edge.fromId) ?? 0) + 1;
-      if (nextLevel > (levels.get(edge.toId) ?? 0)) {
-        levels.set(edge.toId, nextLevel);
-        changed = true;
-      }
-    }
-    if (!changed) break;
-  }
-
-  const byLayer = new Map<number, Issue[]>();
-  for (const issue of graphIssues) {
-    const layer = levels.get(issue.id) ?? 0;
-    const bucket = byLayer.get(layer) ?? [];
-    bucket.push(issue);
-    byLayer.set(layer, bucket);
-  }
-
-  const nodes: GraphNodePosition[] = [];
-  for (const [layer, layerIssues] of [...byLayer.entries()].sort(
-    ([a], [b]) => a - b,
-  )) {
-    layerIssues.sort((a, b) => a.id.localeCompare(b.id));
-    layerIssues.forEach((issue, index) => {
-      nodes.push({
-        issue,
-        layer,
-        x: 24 + layer * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP),
-        y: 24 + index * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP),
-      });
-    });
-  }
-
-  const maxLayer = Math.max(...nodes.map((node) => node.layer), 0);
-  const maxRows = Math.max(
-    ...[...byLayer.values()].map((layerIssues) => layerIssues.length),
-    1,
-  );
-  return {
-    nodes,
-    width: Math.max(680, 48 + (maxLayer + 1) * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP)),
-    height: Math.max(260, 48 + maxRows * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP)),
-  };
-}
-
 function DependencyGraphView({
   issues,
   focusedIssueId,
+  orientation,
+  onOrientationChange,
   onOpenIssue,
 }: {
   issues: Issue[];
   focusedIssueId: string | null;
+  orientation: GraphOrientation;
+  onOrientationChange: (orientation: GraphOrientation) => void;
   onOpenIssue: (issue: Issue) => void;
 }) {
   const [relationFilter, setRelationFilter] =
@@ -891,8 +827,8 @@ function DependencyGraphView({
     [allEdges, relationFilter],
   );
   const layout = useMemo(
-    () => layoutDependencyGraph(issues, edges),
-    [edges, issues],
+    () => layoutDependencyGraph(issues, edges, orientation),
+    [edges, issues, orientation],
   );
   const positions = useMemo(
     () => new Map(layout.nodes.map((node) => [node.issue.id, node])),
@@ -912,25 +848,53 @@ function DependencyGraphView({
             {layout.nodes.length} issues · {edges.length} relationships
           </p>
         </div>
-        <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          Relationship
-          <select
-            aria-label="Filter graph relationships"
-            className="h-8 rounded-md border border-input bg-transparent px-2 text-xs text-foreground"
-            value={relationFilter}
-            onChange={(event) =>
-              setRelationFilter(event.target.value as GraphRelationFilter)
-            }
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Relationship
+            <select
+              aria-label="Filter graph relationships"
+              className="h-8 rounded-md border border-input bg-transparent px-2 text-xs text-foreground"
+              value={relationFilter}
+              onChange={(event) =>
+                setRelationFilter(event.target.value as GraphRelationFilter)
+              }
+            >
+              {(Object.keys(GRAPH_RELATION_LABELS) as GraphRelationFilter[]).map(
+                (option) => (
+                  <option key={option} value={option}>
+                    {GRAPH_RELATION_LABELS[option]}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <div
+            className="flex shrink-0 overflow-hidden rounded-md border border-border"
+            role="group"
+            aria-label="Graph orientation"
           >
-            {(Object.keys(GRAPH_RELATION_LABELS) as GraphRelationFilter[]).map(
-              (option) => (
-                <option key={option} value={option}>
-                  {GRAPH_RELATION_LABELS[option]}
-                </option>
-              ),
-            )}
-          </select>
-        </label>
+            {(
+              [
+                ["horizontal", "Columns2", "Horizontal graph"],
+                ["vertical", "Rows2", "Vertical graph"],
+              ] as const
+            ).map(([value, icon, label]) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={orientation === value ? "secondary" : "ghost"}
+                className="h-8 rounded-none px-2"
+                aria-pressed={orientation === value}
+                aria-label={label}
+                onClick={() => onOrientationChange(value)}
+              >
+                <Icon name={icon} className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">{label}</span>
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
@@ -1007,11 +971,21 @@ function DependencyGraphView({
                 const from = positions.get(edge.fromId);
                 const to = positions.get(edge.toId);
                 if (!from || !to) return null;
-                const startX = from.x + GRAPH_NODE_WIDTH;
-                const startY = from.y + GRAPH_NODE_HEIGHT / 2;
-                const endX = to.x;
-                const endY = to.y + GRAPH_NODE_HEIGHT / 2;
+                const horizontal = orientation === "horizontal";
+                const startX = horizontal
+                  ? from.x + GRAPH_NODE_WIDTH
+                  : from.x + GRAPH_NODE_WIDTH / 2;
+                const startY = horizontal
+                  ? from.y + GRAPH_NODE_HEIGHT / 2
+                  : from.y + GRAPH_NODE_HEIGHT;
+                const endX = horizontal
+                  ? to.x
+                  : to.x + GRAPH_NODE_WIDTH / 2;
+                const endY = horizontal
+                  ? to.y + GRAPH_NODE_HEIGHT / 2
+                  : to.y;
                 const controlX = (startX + endX) / 2;
+                const controlY = (startY + endY) / 2;
                 const selected =
                   selectedIssueId === edge.fromId ||
                   selectedIssueId === edge.toId;
@@ -1022,7 +996,9 @@ function DependencyGraphView({
                 return (
                   <path
                     key={edge.id}
-                    d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
+                    d={horizontal
+                      ? `M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`
+                      : `M ${startX} ${startY} C ${startX} ${controlY}, ${endX} ${controlY}, ${endX} ${endY}`}
                     fill="none"
                     stroke={stroke}
                     strokeWidth={selected ? 2 : 1.25}
@@ -1974,6 +1950,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [epicScopeId, setEpicScopeId] = useState<string | null>(null);
   const [graphFocusId, setGraphFocusId] = useState<string | null>(null);
+  const [graphOrientation, setGraphOrientation] =
+    useState<GraphOrientation>("horizontal");
   const [epicRailOpen, setEpicRailOpen] = useState(false);
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
@@ -2479,6 +2457,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             <DependencyGraphView
               issues={visibleIssues}
               focusedIssueId={graphFocusId}
+              orientation={graphOrientation}
+              onOrientationChange={setGraphOrientation}
               onOpenIssue={openIssue}
             />
           ) : (

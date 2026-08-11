@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildDependencyEdges } from "./dependency-graph";
+import {
+  buildDependencyEdges,
+  layoutDependencyGraph,
+} from "./dependency-graph";
 import type { Issue } from "./bd-client";
 
 function issue(
@@ -62,5 +65,35 @@ describe("buildDependencyEdges", () => {
         ]),
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("layoutDependencyGraph", () => {
+  it("keeps the default dependency flow horizontal", () => {
+    const issues = [
+      issue("A"),
+      issue("B", [{ issue_id: "B", depends_on_id: "A", type: "blocks" }]),
+    ];
+    const layout = layoutDependencyGraph(issues, buildDependencyEdges(issues));
+    const positions = new Map(layout.nodes.map((node) => [node.issue.id, node]));
+
+    expect(positions.get("B")?.x).toBeGreaterThan(positions.get("A")?.x ?? 0);
+    expect(positions.get("B")?.y).toBe(positions.get("A")?.y);
+  });
+
+  it("rotates dependency flow vertically without changing its layers", () => {
+    const issues = [
+      issue("A"),
+      issue("B", [{ issue_id: "B", depends_on_id: "A", type: "blocks" }]),
+    ];
+    const layout = layoutDependencyGraph(
+      issues,
+      buildDependencyEdges(issues),
+      "vertical",
+    );
+    const positions = new Map(layout.nodes.map((node) => [node.issue.id, node]));
+
+    expect(positions.get("B")?.y).toBeGreaterThan(positions.get("A")?.y ?? 0);
+    expect(positions.get("B")?.x).toBe(positions.get("A")?.x);
   });
 });

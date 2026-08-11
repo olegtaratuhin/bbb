@@ -1,6 +1,12 @@
 import type { Issue, IssueDependency } from "./bd-client";
 
 export type GraphRelation = "blocking" | "hierarchy" | "related" | "other";
+export type GraphOrientation = "horizontal" | "vertical";
+
+export const GRAPH_NODE_WIDTH = 196;
+export const GRAPH_NODE_HEIGHT = 68;
+export const GRAPH_COLUMN_GAP = 52;
+export const GRAPH_ROW_GAP = 24;
 
 export interface DependencyEdge {
   id: string;
@@ -9,6 +15,19 @@ export interface DependencyEdge {
   type: string;
   relation: GraphRelation;
   directed: boolean;
+}
+
+export interface GraphNodePosition {
+  issue: Issue;
+  x: number;
+  y: number;
+  layer: number;
+}
+
+export interface DependencyGraphLayout {
+  nodes: GraphNodePosition[];
+  width: number;
+  height: number;
 }
 
 function relationFor(type: string): GraphRelation {
@@ -63,4 +82,92 @@ export function buildDependencyEdges(
   }
 
   return [...edges.values()];
+}
+
+/**
+ * Arrange dependency layers in the requested reading direction.
+ *
+ * The edge direction is always blocker/parent -> dependent/child. Horizontal
+ * is the default because it keeps the original graph behavior; vertical uses
+ * the same layers and ordering, rotated so the dependency flow reads down.
+ */
+export function layoutDependencyGraph(
+  issues: readonly Issue[],
+  edges: readonly DependencyEdge[],
+  orientation: GraphOrientation = "horizontal",
+): DependencyGraphLayout {
+  const nodeIds = new Set<string>();
+  for (const edge of edges) {
+    nodeIds.add(edge.fromId);
+    nodeIds.add(edge.toId);
+  }
+  const graphIssues = issues
+    .filter((issue) => nodeIds.has(issue.id))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const levels = new Map(graphIssues.map((issue) => [issue.id, 0]));
+
+  // Longest-path layering keeps blockers and parents before their dependents.
+  // Bounded passes also keep malformed/cyclic dependency data renderable.
+  for (let pass = 0; pass < graphIssues.length; pass++) {
+    let changed = false;
+    for (const edge of edges) {
+      const nextLevel = (levels.get(edge.fromId) ?? 0) + 1;
+      if (nextLevel > (levels.get(edge.toId) ?? 0)) {
+        levels.set(edge.toId, nextLevel);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  const byLayer = new Map<number, Issue[]>();
+  for (const issue of graphIssues) {
+    const layer = levels.get(issue.id) ?? 0;
+    const bucket = byLayer.get(layer) ?? [];
+    bucket.push(issue);
+    byLayer.set(layer, bucket);
+  }
+
+  const nodes: GraphNodePosition[] = [];
+  for (const [layer, layerIssues] of [...byLayer.entries()].sort(
+    ([a], [b]) => a - b,
+  )) {
+    layerIssues.sort((a, b) => a.id.localeCompare(b.id));
+    layerIssues.forEach((issue, index) => {
+      nodes.push({
+        issue,
+        layer,
+        x:
+          orientation === "horizontal"
+            ? 24 + layer * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP)
+            : 24 + index * (GRAPH_NODE_WIDTH + GRAPH_ROW_GAP),
+        y:
+          orientation === "horizontal"
+            ? 24 + index * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP)
+            : 24 + layer * (GRAPH_NODE_HEIGHT + GRAPH_COLUMN_GAP),
+      });
+    });
+  }
+
+  const maxLayer = Math.max(...nodes.map((node) => node.layer), 0);
+  const maxRows = Math.max(
+    ...[...byLayer.values()].map((layerIssues) => layerIssues.length),
+    1,
+  );
+  const layerWidth = GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP;
+  const layerHeight = GRAPH_NODE_HEIGHT + GRAPH_COLUMN_GAP;
+  const rowWidth = GRAPH_NODE_WIDTH + GRAPH_ROW_GAP;
+  const rowHeight = GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP;
+
+  return orientation === "horizontal"
+    ? {
+        nodes,
+        width: Math.max(680, 48 + (maxLayer + 1) * layerWidth),
+        height: Math.max(260, 48 + maxRows * rowHeight),
+      }
+    : {
+        nodes,
+        width: Math.max(420, 48 + maxRows * rowWidth),
+        height: Math.max(260, 48 + (maxLayer + 1) * layerHeight),
+      };
 }
