@@ -228,7 +228,7 @@ function StatusIcon({
     <svg viewBox="0 0 14 14" aria-hidden className={`${color} ${className}`}>
       {status === "closed" ? (
         <>
-          <circle cx="7" cy="7" r="6" fill="currentColor" />
+          <circle cx="7" cy="7" r="5.4" fill="currentColor" />
           <path
             d="M4.4 7.2 l1.8 1.8 3.4-3.8"
             fill="none"
@@ -239,10 +239,10 @@ function StatusIcon({
         </>
       ) : status === "blocked" ? (
         <>
-          {ring()}
+          <circle cx="7" cy="7" r="5.4" fill="currentColor" />
           <path
             d="M5 5 l4 4 M9 5 l-4 4"
-            stroke="currentColor"
+            stroke="var(--background)"
             strokeWidth="1.4"
             strokeLinecap="round"
           />
@@ -252,8 +252,10 @@ function StatusIcon({
           {ring()}
           <path d="M7 7 L7 2.4 A4.6 4.6 0 0 1 11.2 9.5 Z" fill="currentColor" />
         </>
+      ) : status === "deferred" ? (
+        ring(true)
       ) : (
-        ring(status !== "open")
+        ring(true)
       )}
     </svg>
   );
@@ -444,20 +446,17 @@ function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
   return (
     <button
       type="button"
-      className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="flex w-full min-h-10 cursor-pointer items-center gap-2 border-b border-border-hairline px-3 py-1.5 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       onClick={onOpen}
     >
-      <span className="min-w-0">
-        <span className="block truncate text-xs text-muted-foreground">
-          {issue.id}
-        </span>
-        <span className="mt-0.5 block truncate font-medium">{issue.title}</span>
+      <span className="shrink-0 text-[11px] font-mono text-muted-foreground">
+        {issue.id}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium">{issue.title}</span>
       </span>
       <span className="flex shrink-0 items-center gap-2">
-        <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
-          <StatusIcon status={issue.status} className="h-3 w-3" />
-          {statusLabel(issue.status)}
-        </span>
+        <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <PriorityIcon priority={issue.priority} className="h-3 w-3" />
           P{issue.priority ?? 2}
@@ -471,7 +470,7 @@ function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
   return (
     <button
       type="button"
-      className="w-full cursor-pointer rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="w-full cursor-pointer rounded-md border border-border bg-card p-2.5 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       onClick={onOpen}
     >
       <span className="mb-1 block truncate text-xs text-muted-foreground">
@@ -506,7 +505,7 @@ function KanbanColumnBody({
 }) {
   const config = status === OTHER_STATUS ? OTHER_STATUS_CONFIG : STATUS_CONFIG[status];
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       {issues.length > 0 ? (
         issues.map((issue) => (
           <IssueCard
@@ -539,7 +538,7 @@ function KanbanColumn({
   const header = (
     <>
       <span className="flex items-center gap-2">
-        <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+        <StatusIcon status={status} className="h-3.5 w-3.5 shrink-0" />
         {config.label}
       </span>
       <span className="flex items-center gap-2">
@@ -557,7 +556,7 @@ function KanbanColumn({
     <details
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
-      className="group snap-start @md:flex @md:flex-1 @md:min-w-[12rem] @md:flex-col @md:gap-2"
+      className="group snap-start @md:flex @md:flex-1 @md:min-w-[10rem] @md:flex-col @md:gap-2"
     >
       <summary
         className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
@@ -605,7 +604,7 @@ function KanbanBoard({
         role="region"
         aria-label="Kanban board"
       >
-        <div className="mx-auto flex w-full min-w-[60rem] max-w-[80rem] snap-x snap-mandatory gap-3">
+        <div className="mx-auto flex w-full min-w-[52rem] max-w-[72rem] snap-x snap-mandatory gap-2">
           {visibleColumns.map((status) => (
             <KanbanColumn
               key={status}
@@ -666,13 +665,16 @@ function IssueListView({
               id={`list-${group.status}`}
               className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-hairline bg-background px-1.5 pb-1.5 pt-1 text-xs font-semibold"
             >
-              <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+              <StatusIcon
+                status={group.status === OTHER_STATUS ? undefined : group.status}
+                className="h-3.5 w-3.5 shrink-0"
+              />
               {config.label}
               <span className="font-normal tabular-nums text-muted-foreground">
                 {group.issues.length}
               </span>
             </div>
-            <div className="grid gap-1.5 pt-1.5">
+            <div>
               {group.issues.map((issue) => (
                 <IssueRow
                   key={issue.id}
@@ -858,7 +860,8 @@ function EpicNavigationRail({
   onSelectEpic: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedStatuses, setSelectedStatuses] = useState<IssueStatus[]>([]);
+  const [selectedPriorities, setSelectedPriorities] = useState<number[]>([]);
   const [sortMode, setSortMode] = useState<EpicSortMode>("progress_desc");
   const progress = useMemo(() => buildEpicProgress(issues), [issues]);
   const visibleProgress = useMemo(() => {
@@ -871,9 +874,12 @@ function EpicNavigationRail({
               .includes(normalizedQuery)
           : true;
         const matchesStatus =
-          statusFilter === "all" ||
-          (entry.statusCounts[statusFilter] ?? 0) > 0;
-        return matchesQuery && matchesStatus;
+          selectedStatuses.length === 0 ||
+          selectedStatuses.includes(entry.container.status as IssueStatus);
+        const matchesPriority =
+          selectedPriorities.length === 0 ||
+          selectedPriorities.includes(entry.container.priority ?? 2);
+        return matchesQuery && matchesStatus && matchesPriority;
       })
       .map((entry, index) => ({ entry, index }))
       .sort((a, b) => {
@@ -892,7 +898,7 @@ function EpicNavigationRail({
         return result || a.index - b.index;
       })
       .map(({ entry }) => entry);
-  }, [progress, query, sortMode, statusFilter]);
+  }, [progress, query, selectedPriorities, selectedStatuses, sortMode]);
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-l border-border-hairline bg-background px-3 py-4 max-md:w-56">
@@ -910,32 +916,94 @@ function EpicNavigationRail({
           onChange={(event) => setQuery(event.target.value)}
           className="h-8 text-xs"
         />
-        <div className="grid grid-cols-2 gap-1.5">
-          <select
-            aria-label="Filter epics by child status"
-            className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2 text-xs"
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
+        <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5">
+          <FilterChip
+            icon="Circle"
+            label="Status"
+            selectedLabels={selectedStatuses.map(statusLabel)}
           >
-            <option value="all">All status</option>
-            {STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {statusLabel(status)}
-              </option>
+            {STATUSES.map((option) => (
+              <FilterOption
+                key={option}
+                checked={selectedStatuses.includes(option)}
+                onChange={(checked) =>
+                  setSelectedStatuses((current) =>
+                    checked
+                      ? current.includes(option)
+                        ? current
+                        : [...current, option]
+                      : current.filter((value) => value !== option),
+                  )
+                }
+              >
+                <span className="flex items-center gap-2">
+                  <StatusIcon status={option} className="h-3 w-3" />
+                  {statusLabel(option)}
+                </span>
+              </FilterOption>
             ))}
-          </select>
-          <select
-            aria-label="Sort epics"
-            className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2 text-xs"
-            value={sortMode}
-            onChange={(event) => setSortMode(event.target.value as EpicSortMode)}
+          </FilterChip>
+          <FilterChip
+            icon="ArrowUpDown"
+            label="Priority"
+            selectedLabels={selectedPriorities.map(
+              (priority) => PRIORITY_LABELS[priority],
+            )}
+          >
+            {PRIORITIES.map((option) => (
+              <FilterOption
+                key={option}
+                checked={selectedPriorities.includes(option)}
+                onChange={(checked) =>
+                  setSelectedPriorities((current) =>
+                    checked
+                      ? current.includes(option)
+                        ? current
+                        : [...current, option]
+                      : current.filter((value) => value !== option),
+                  )
+                }
+              >
+                <span className="flex items-center gap-2">
+                  <PriorityIcon priority={option} className="h-3 w-3" />
+                  {PRIORITY_LABELS[option]}
+                </span>
+              </FilterOption>
+            ))}
+          </FilterChip>
+          <FilterChip
+            icon="Sort"
+            label="Sort"
+            selectedLabels={
+              sortMode === "progress_desc" ? [] : [EPIC_SORT_LABELS[sortMode]]
+            }
+            align="end"
           >
             {(Object.keys(EPIC_SORT_LABELS) as EpicSortMode[]).map((option) => (
-              <option key={option} value={option}>
+              <FilterOption
+                key={option}
+                checked={sortMode === option}
+                onChange={(checked) => {
+                  if (checked) setSortMode(option);
+                }}
+              >
                 {EPIC_SORT_LABELS[option]}
-              </option>
+              </FilterOption>
             ))}
-          </select>
+          </FilterChip>
+          {selectedStatuses.length > 0 || selectedPriorities.length > 0 ? (
+            <button
+              type="button"
+              className="flex h-6 shrink-0 items-center gap-1 rounded-md border border-dashed border-border px-2.5 text-xs text-muted-foreground hover:border-input hover:text-foreground max-md:pointer-coarse:h-8"
+              onClick={() => {
+                setSelectedStatuses([]);
+                setSelectedPriorities([]);
+              }}
+            >
+              <Icon name="X" className="h-3 w-3" aria-hidden="true" />
+              Clear
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
@@ -1124,7 +1192,7 @@ function CreateIssueDialog({
       <DialogTrigger asChild>
         <Button size="sm">
           <Icon name="Plus" className="h-4 w-4" aria-hidden="true" />
-          New issue
+          New task
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -1373,7 +1441,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [refresh, setRefresh] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [epicScopeId, setEpicScopeId] = useState<string | null>(null);
-  const [epicRailOpen, setEpicRailOpen] = useState(true);
+  const [epicRailOpen, setEpicRailOpen] = useState(false);
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
       typeof window === "undefined" ? undefined : window.localStorage,
@@ -1508,6 +1576,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   function openEpicIssues(issue: Issue) {
     setEpicScopeId(issue.id);
+    setEpicRailOpen(true);
     setViewMode("epics");
     closeDetail();
   }
