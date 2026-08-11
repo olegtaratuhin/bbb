@@ -17,7 +17,12 @@ import {
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
-import { analyze, completions, highlights, type CompletionItem, type HighlightSpan } from "./query-core";
+import { type CompletionItem, type HighlightSpan } from "./query-core";
+import { applyCompletion, createQueryEditorModel } from "./query-editor-model";
+import {
+  describeQueryExecution,
+  QUERY_EXECUTION_DEBOUNCE_MS,
+} from "./query-execution";
 import {
   buildDependencyEdges,
   GRAPH_NODE_HEIGHT,
@@ -189,24 +194,6 @@ function issueMatches(issue: Issue, query: string) {
     .includes(normalizedQuery);
 }
 
-function hasQuerySyntax(analysis: ReturnType<typeof analyze>) {
-  return analysis.tokens.some((token) =>
-    [
-      "equals",
-      "not-equals",
-      "less",
-      "less-equals",
-      "greater",
-      "greater-equals",
-      "and",
-      "or",
-      "not",
-      "left-paren",
-      "right-paren",
-    ].includes(token.kind),
-  );
-}
-
 const HIGHLIGHT_CLASSES: Record<HighlightSpan["kind"], string> = {
   field: "text-sky-600 dark:text-sky-400",
   operator: "text-violet-600 dark:text-violet-400",
@@ -230,32 +217,26 @@ function QueryInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const [focused, setFocused] = useState(false);
   const [cursor, setCursor] = useState(value.length);
-  const analysis = useMemo(() => analyze(value), [value]);
-  const queryMode = hasQuerySyntax(analysis);
-  const queryHighlights = useMemo(
-    () => (queryMode ? highlights(value) : []),
-    [queryMode, value],
+  const editorModel = useMemo(
+    () => createQueryEditorModel(value, cursor),
+    [cursor, value],
   );
-  const suggestions = useMemo(
-    () => (focused ? completions(value, cursor).slice(0, 8) : []),
-    [cursor, focused, value],
-  );
-  const diagnostics = queryMode
-    ? analysis.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
-    : [];
+  const queryMode = editorModel.queryMode;
+  const queryHighlights = editorModel.highlights;
+  const suggestions = focused ? editorModel.completions.slice(0, 8) : [];
+  const diagnostics = editorModel.diagnostics;
 
   function updateCursor() {
     setCursor(inputRef.current?.selectionStart ?? value.length);
   }
 
   function acceptSuggestion(item: CompletionItem) {
-    const nextValue = `${value.slice(0, item.replacement.from)}${item.insertText}${value.slice(item.replacement.to)}`;
-    const nextCursor = item.replacement.from + item.insertText.length;
-    onChange(nextValue);
-    setCursor(nextCursor);
+    const next = applyCompletion(value, item);
+    onChange(next.source);
+    setCursor(next.cursor);
     requestAnimationFrame(() => {
       inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+      inputRef.current?.setSelectionRange(next.cursor, next.cursor);
     });
   }
 
@@ -2093,6 +2074,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       typeof window === "undefined" ? undefined : window.localStorage,
     ),
   );
+  const listRequestGeneration = useRef(0);
   const configuredProjectId =
     typeof settingValues?.projectId === "string"
       ? settingValues.projectId
@@ -2113,12 +2095,10 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     : null;
 
   const detailOpen = selectedId !== null;
-  const queryAnalysis = useMemo(() => analyze(query), [query]);
-  const queryMode = hasQuerySyntax(queryAnalysis);
-  const queryDiagnostics = queryMode
-    ? queryAnalysis.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
-    : [];
-  const beadsQuery = queryMode && queryDiagnostics.length === 0 ? query.trim() : "";
+  const queryExecution = useMemo(() => describeQueryExecution(query), [query]);
+  const queryMode = queryExecution.mode === "query" || queryExecution.mode === "invalid";
+  const queryDiagnostics = queryExecution.diagnostics;
+  const beadsQuery = queryExecution.query;
 
   useEffect(() => {
     const refreshRootProject = () => {
@@ -2133,13 +2113,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }, []);
 
   async function loadIssues() {
+    const generation = ++listRequestGeneration.current;
     if (queryMode && queryDiagnostics.length > 0) {
       setIssues([]);
       setError(null);
+      setLoading(false);
       return;
     }
     if (!rpcProjectId && !workspacePathOverride) {
       setIssues([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -2149,11 +2132,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
         ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
         ...(beadsQuery ? { query: beadsQuery } : {}),
       });
+      if (generation !== listRequestGeneration.current) return;
       setIssues(result.issues as Issue[]);
     } catch (cause) {
+      if (generation !== listRequestGeneration.current) return;
       setError(cause instanceof Error ? cause.message : "Unable to load Beads");
     } finally {
-      setLoading(false);
+      if (generation === listRequestGeneration.current) setLoading(false);
     }
   }
 
@@ -2174,8 +2159,20 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   useEffect(() => {
-    void loadIssues();
-  }, [beadsQuery, queryDiagnostics.length, queryMode, refresh, rpcProjectId, workspacePathOverride]);
+    const delay = queryExecution.mode === "query"
+      ? QUERY_EXECUTION_DEBOUNCE_MS
+      : 0;
+    const timer = window.setTimeout(() => void loadIssues(), delay);
+    return () => window.clearTimeout(timer);
+  }, [
+    beadsQuery,
+    queryDiagnostics.length,
+    queryExecution.mode,
+    queryMode,
+    refresh,
+    rpcProjectId,
+    workspacePathOverride,
+  ]);
 
   useEffect(() => {
     void loadDetail();
