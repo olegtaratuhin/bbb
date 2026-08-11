@@ -84,6 +84,9 @@ const STATUS_CONFIG: Record<
   },
 };
 
+const ISSUE_COUNT_BADGE_CLASS =
+  "inline-flex h-8 items-center rounded-md bg-muted px-2 text-xs text-muted-foreground";
+
 function statusLabel(status: string | undefined) {
   return STATUS_CONFIG[status as IssueStatus]?.label ?? "unknown";
 }
@@ -198,12 +201,10 @@ function KanbanColumn({
   issues,
   onOpenIssue,
   status,
-  collapsible = false,
 }: {
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
   status: IssueStatus;
-  collapsible?: boolean;
 }) {
   const config = STATUS_CONFIG[status];
   const [expanded, setExpanded] = useState(() => issues.length > 0);
@@ -215,51 +216,35 @@ function KanbanColumn({
         {config.label}
       </span>
       <span className="flex items-center gap-2">
-        <span className="text-muted-foreground">{issues.length}</span>
-        {collapsible ? (
-          <span
-            className="text-sm normal-case transition-transform group-open:rotate-180 sm:hidden"
-            aria-hidden="true"
-          >
-            ⌄
-          </span>
-        ) : null}
+        <span className={ISSUE_COUNT_BADGE_CLASS}>{issues.length}</span>
+        <Icon
+          name="ChevronDown"
+          className="h-4 w-4 normal-case transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
       </span>
     </>
   );
 
-  if (collapsible) {
-    return (
-      <details
-        open={expanded}
-        onToggle={(event) => setExpanded(event.currentTarget.open)}
-        className="group"
-      >
-        <summary
-          className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
-        >
-          {header}
-        </summary>
-        <div className="mt-2">
-          <KanbanColumnBody
-            issues={issues}
-            onOpenIssue={onOpenIssue}
-            status={status}
-          />
-        </div>
-      </details>
-    );
-  }
-
   return (
-    <div className="flex w-[15rem] min-w-[15rem] flex-col gap-2 snap-start">
-      <div className={headerClass}>{header}</div>
-      <KanbanColumnBody
-        issues={issues}
-        onOpenIssue={onOpenIssue}
-        status={status}
-      />
-    </div>
+    <details
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+      className="group snap-start sm:flex sm:w-[15rem] sm:min-w-[15rem] sm:flex-col sm:gap-2"
+    >
+      <summary
+        className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
+      >
+        {header}
+      </summary>
+      <div className="mt-2 sm:mt-0">
+        <KanbanColumnBody
+          issues={issues}
+          onOpenIssue={onOpenIssue}
+          status={status}
+        />
+      </div>
+    </details>
   );
 }
 
@@ -307,7 +292,6 @@ function KanbanBoard({
             issues={columns.get(status) ?? []}
             onOpenIssue={onOpenIssue}
             status={status}
-            collapsible
           />
         ))}
       </div>
@@ -838,7 +822,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   List
                 </Button>
               </div>
-              <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+              <span className={ISSUE_COUNT_BADGE_CLASS}>
                 {loading ? "Loading…" : `${visibleIssues.length} issues`}
               </span>
               <Button
