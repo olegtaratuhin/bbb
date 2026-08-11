@@ -605,7 +605,7 @@ function KanbanBoard({
         role="region"
         aria-label="Kanban board"
       >
-        <div className="mx-auto flex w-full min-w-[52rem] max-w-[72rem] snap-x snap-mandatory gap-2">
+        <div className="mx-auto flex w-full min-w-[52rem] max-w-none snap-x snap-mandatory gap-2">
           {visibleColumns.map((status) => (
             <KanbanColumn
               key={status}
@@ -2136,7 +2136,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     <div className="@container flex h-full flex-col">
       {/* Header */}
       <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-2">
-        <div className="mx-auto max-w-7xl">
+        <div className="w-full">
           <div className="flex min-w-0 items-center gap-2">
             <Button
               type="button"
@@ -2331,7 +2331,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       {/* Content area */}
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto p-4">
-          <div className="mx-auto max-w-7xl">
+          <div className="w-full">
           {viewMode === "epics" ? (
             <EpicWorkspace
               issues={issues}
