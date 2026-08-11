@@ -86,6 +86,8 @@ const STATUS_CONFIG: Record<
 
 const ISSUE_COUNT_BADGE_CLASS =
   "inline-flex h-8 items-center rounded-md bg-muted px-2 text-xs text-muted-foreground";
+const COLUMN_COUNT_BADGE_CLASS =
+  "inline-flex h-4 min-w-4 items-center justify-center rounded bg-muted px-1.5 text-[11px] leading-4 text-muted-foreground";
 
 function statusLabel(status: string | undefined) {
   return STATUS_CONFIG[status as IssueStatus]?.label ?? "unknown";
@@ -216,7 +218,7 @@ function KanbanColumn({
         {config.label}
       </span>
       <span className="flex items-center gap-2">
-        <span className={ISSUE_COUNT_BADGE_CLASS}>{issues.length}</span>
+        <span className={COLUMN_COUNT_BADGE_CLASS}>{issues.length}</span>
         <Icon
           name="ChevronDown"
           className="h-4 w-4 normal-case transition-transform group-open:rotate-180"
