@@ -32,6 +32,20 @@ canonicalFieldName(value: string): string
 `QueryAnalysis` bundles tokens, AST, and merged diagnostics in one object.
 `completions()` and `highlights()` are thin wrappers around `analyze()`.
 
+## Mobile assistance contract
+
+`mobile-contract.ts` defines the platform-neutral state and event contract for
+touch-oriented query entry. It intentionally does not depend on React, DOM,
+or a mobile toolkit. An adapter may expose raw editing, completion pickers,
+quick filters, and a structured builder, but every generated source is still
+validated by this package before it reaches Beads.
+
+The contract requires UTF-16 replacement offsets, defers completion actions
+during IME composition, honors safe-area and keyboard occlusion, uses 44 CSS
+pixel minimum touch targets, and keeps incomplete/invalid queries recoverable.
+Builder rows omit empty conditions and preserve explicit boolean connectors.
+`MOBILE_QUERY_ASSIST_EXAMPLES` contains deterministic adapter scenarios.
+
 ## Compatibility contract
 
 The compatibility authority is the upstream Beads query package:
