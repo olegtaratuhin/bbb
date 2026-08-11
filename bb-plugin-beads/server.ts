@@ -9,6 +9,11 @@ import {
   updateIssueArgs,
   type Issue,
 } from "./bd-client";
+import {
+  resolveWorkspaceTarget,
+  selectLocalWorkspaceSource,
+  type ProjectSourceLike,
+} from "./workspace-resolution";
 
 const issueSchema = z
   .object({
@@ -25,7 +30,7 @@ const issueSchema = z
   })
   .passthrough();
 
-const projectInput = z.object({ projectId: z.string().min(1) });
+const projectInput = z.object({ projectId: z.string().min(1).optional() });
 const issueIdInput = projectInput.extend({ id: z.string().min(1) });
 
 const issueOutput = z.object({ issue: issueSchema });
@@ -65,7 +70,12 @@ export const rpcContract = defineRpcContract({
   },
 });
 
-type ProjectSource = { isDefault: boolean; path: string; type: string };
+interface BeadsSettings {
+  get(): Promise<{
+    projectId?: string;
+    workspacePath: string;
+  }>;
+}
 
 function errorMessage(result: { kind: string; message?: string; stderr?: string; error?: string }) {
   if (result.kind === "spawn") {
@@ -85,23 +95,38 @@ function asIssue(value: unknown): Issue {
   return issue;
 }
 
-async function getWorkspacePath(bb: BbPluginApi, projectId: string) {
-  const project = await bb.sdk.projects.get({ projectId });
-  const source = project.sources.find(
-    (candidate: ProjectSource) => candidate.isDefault,
-  ) ?? project.sources[0];
-  if (!source || source.type !== "local_path" || !source.path) {
-    throw new Error("The selected project has no local workspace for bd");
+async function getWorkspacePath(
+  bb: BbPluginApi,
+  settings: BeadsSettings,
+  projectId?: string,
+) {
+  const configured = await settings.get();
+  const target = resolveWorkspaceTarget({
+    configuredProjectId: configured.projectId,
+    projectId,
+    workspacePath: configured.workspacePath,
+  });
+  if (target === null) {
+    throw new Error(
+      "No BB project is selected. Open a project in BB or configure a Beads project/path override in Settings.",
+    );
   }
-  return source.path;
+  if (target.kind === "path") return target.path;
+
+  const project = await bb.sdk.projects.get({ projectId: target.projectId });
+  const source = selectLocalWorkspaceSource(
+    project.sources as readonly ProjectSourceLike[],
+  );
+  return source.path!.trim();
 }
 
 async function runProjectBd(
   bb: BbPluginApi,
-  projectId: string,
+  settings: BeadsSettings,
+  projectId: string | undefined,
   args: readonly string[],
 ) {
-  const cwd = await getWorkspacePath(bb, projectId);
+  const cwd = await getWorkspacePath(bb, settings, projectId);
   const result = await runBdJson(args, { cwd });
   if (!result.ok) {
     throw new Error(errorMessage(result));
@@ -112,22 +137,40 @@ async function runProjectBd(
 export default async function plugin(bb: BbPluginApi) {
   bb.log.info("loaded");
 
+  const settings = bb.settings.define({
+    projectId: {
+      type: "project",
+      label: "Project override",
+      description:
+        "Optional BB project to use when the current project cannot be discovered from the open page.",
+    },
+    workspacePath: {
+      type: "string",
+      label: "Workspace path override",
+      description:
+        "Optional absolute path containing .beads. This takes precedence over project selection and runs bd on the BB server host.",
+      default: "",
+    },
+  });
+
   bb.rpc.register(rpcContract, {
     async listIssues({ projectId, status, priority }) {
       const value = await runProjectBd(
         bb,
+        settings,
         projectId,
         listIssuesArgs({ status, priority }),
       );
       return { issues: normalizeIssues(value) };
     },
     async showIssue({ projectId, id }) {
-      const value = await runProjectBd(bb, projectId, showIssueArgs(id));
+      const value = await runProjectBd(bb, settings, projectId, showIssueArgs(id));
       return { issue: asIssue(value) };
     },
     async createIssue({ projectId, title, type, priority, description }) {
       const value = await runProjectBd(
         bb,
+        settings,
         projectId,
         createIssueArgs({ title, type, priority, description }),
       );
@@ -144,6 +187,7 @@ export default async function plugin(bb: BbPluginApi) {
     }) {
       const value = await runProjectBd(
         bb,
+        settings,
         projectId,
         updateIssueArgs(id, {
           status,

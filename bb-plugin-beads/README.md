@@ -15,8 +15,17 @@ project. It provides:
 - creating a new issue with type, priority, and description;
 - explicit refresh after changes.
 
-The panel is intentionally project-scoped. The selected BB project must have a
-local workspace and a working `bd` executable.
+The panel follows the project currently selected in BB. Its resolution order
+is:
+
+1. the Beads **Workspace path override** setting, when configured;
+2. the Beads **Project override** setting, when configured;
+3. the project in the current BB route/composer;
+4. BB's persisted root-compose project selection.
+
+The path override is useful for an arbitrary checkout and must be accessible
+from the BB server host. Project sources must have a local workspace and a
+working `bd` executable.
 
 ## Install locally
 

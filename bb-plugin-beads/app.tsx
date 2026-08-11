@@ -4,7 +4,9 @@ import {
   Markdown,
   useBbContext,
   useBbNavigate,
+  useComposerView,
   useRpc,
+  useSettings,
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
@@ -27,6 +29,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  chooseProjectId,
+  projectIdFromComposerScope,
+  readRootComposeProjectId,
+} from "./project-context";
 
 const STATUSES = [
   "open",
@@ -334,6 +341,8 @@ function IssueDetails({
 
 function BeadsPanel({ subPath }: { subPath: string }) {
   const { projectId } = useBbContext();
+  const composerView = useComposerView();
+  const { values: settingValues, isLoading: settingsLoading } = useSettings();
   const navigate = useBbNavigate();
   const rpc = useRpc<typeof rpcContract>();
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -344,12 +353,44 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
+    readRootComposeProjectId(
+      typeof window === "undefined" ? undefined : window.localStorage,
+    ),
+  );
+  const configuredProjectId =
+    typeof settingValues?.projectId === "string"
+      ? settingValues.projectId
+      : null;
+  const workspacePathOverride =
+    typeof settingValues?.workspacePath === "string"
+      ? settingValues.workspacePath.trim()
+      : "";
+  const currentProjectId = chooseProjectId({
+    configuredProjectId,
+    composerProjectId: projectIdFromComposerScope(composerView.scope),
+    rootComposeProjectId,
+    routeProjectId: projectId,
+  });
+  const rpcProjectId = workspacePathOverride ? undefined : currentProjectId;
   const selectedId = subPath.startsWith("issue/")
     ? decodeURIComponent(subPath.slice("issue/".length))
     : null;
 
+  useEffect(() => {
+    const refreshRootProject = () => {
+      setRootComposeProjectId(readRootComposeProjectId(window.localStorage));
+    };
+    window.addEventListener("storage", refreshRootProject);
+    window.addEventListener("focus", refreshRootProject);
+    return () => {
+      window.removeEventListener("storage", refreshRootProject);
+      window.removeEventListener("focus", refreshRootProject);
+    };
+  }, []);
+
   async function loadIssues() {
-    if (!projectId) {
+    if (!rpcProjectId && !workspacePathOverride) {
       setIssues([]);
       return;
     }
@@ -357,7 +398,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setError(null);
     try {
       const result = await rpc.call("listIssues", {
-        projectId,
+        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
         ...(status === "all" ? {} : { status }),
       });
       setIssues(result.issues as Issue[]);
@@ -369,12 +410,15 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   async function loadDetail() {
-    if (!projectId || !selectedId) {
+    if ((!rpcProjectId && !workspacePathOverride) || !selectedId) {
       setDetail(null);
       return;
     }
     try {
-      const result = await rpc.call("showIssue", { projectId, id: selectedId });
+      const result = await rpc.call("showIssue", {
+        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
+        id: selectedId,
+      });
       setDetail(result.issue as Issue);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load issue");
@@ -383,11 +427,11 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   useEffect(() => {
     void loadIssues();
-  }, [projectId, status, refresh]);
+  }, [rpcProjectId, status, refresh, workspacePathOverride]);
 
   useEffect(() => {
     void loadDetail();
-  }, [projectId, selectedId, refresh]);
+  }, [rpcProjectId, selectedId, refresh, workspacePathOverride]);
 
   const visibleIssues = useMemo(
     () => issues.filter((issue) => issueMatches(issue, query)),
@@ -400,12 +444,15 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     priority: number;
     description?: string;
   }) {
-    if (!projectId) {
+    if (!rpcProjectId && !workspacePathOverride) {
       return;
     }
     setError(null);
     try {
-      const result = await rpc.call("createIssue", { projectId, ...input });
+      const result = await rpc.call("createIssue", {
+        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
+        ...input,
+      });
       setRefresh((value) => value + 1);
       navigate.toPluginPanel("board", {
         subPath: `issue/${encodeURIComponent((result.issue as Issue).id)}`,
@@ -423,25 +470,44 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     description?: string;
     acceptance?: string;
   }) {
-    if (!projectId || !selectedId) {
+    if ((!rpcProjectId && !workspacePathOverride) || !selectedId) {
       return;
     }
     setError(null);
     try {
-      await rpc.call("updateIssue", { projectId, id: selectedId, ...input });
+      await rpc.call("updateIssue", {
+        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
+        id: selectedId,
+        ...input,
+      });
       setRefresh((value) => value + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to update issue");
     }
   }
 
-  if (!projectId) {
+  if (settingsLoading) {
+    return (
+      <div className="h-full overflow-y-auto p-4">
+        <Card>
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            Loading Beads settings…
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!rpcProjectId && !workspacePathOverride) {
     return (
       <div className="h-full overflow-y-auto p-4">
         <Card>
           <CardHeader>
             <CardTitle>Beads</CardTitle>
-            <CardDescription>Select a project to browse its issues.</CardDescription>
+            <CardDescription>
+              Open a BB project or configure a Beads project/path override in
+              Settings → Extensions → Beads.
+            </CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -455,7 +521,9 @@ function BeadsPanel({ subPath }: { subPath: string }) {
           <div>
             <h1 className="text-lg font-semibold">Beads</h1>
             <p className="text-sm text-muted-foreground">
-              Project issues backed by the local <code>bd</code> CLI.
+              {workspacePathOverride
+                ? `Workspace override: ${workspacePathOverride}`
+                : "Project issues backed by the local bd CLI."}
             </p>
           </div>
           <CreateIssueDialog
@@ -528,6 +596,18 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 }
 
 export default definePluginApp((app) => {
+  app.slots.settingsSection({
+    id: "configuration",
+    title: "Project resolution",
+    description: "Choose how Beads finds the workspace for bd.",
+    component: () => (
+      <p className="text-sm text-muted-foreground">
+        Beads follows the project open in BB when available. Use Project
+        override to pin another BB project, or Workspace path override for an
+        arbitrary local path containing .beads.
+      </p>
+    ),
+  });
   app.slots.navPanel({
     id: "board",
     title: "Beads",
