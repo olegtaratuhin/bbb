@@ -19,7 +19,9 @@ import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
 import {
   buildEpicProgress,
+  getDescendantWorkIssues,
   getUnassignedWorkIssues,
+  isContainerIssue,
   type EpicProgress,
 } from "./epic-progress";
 import { Button } from "@/components/ui/button";
@@ -968,8 +970,12 @@ function CreateIssueDialog({
 function IssueDetailsContent({
   issue,
   onUpdate,
+  childIssueCount,
+  onViewChildren,
 }: {
   issue: Issue;
+  childIssueCount: number;
+  onViewChildren: (issue: Issue) => void;
   onUpdate: (input: {
     status?: IssueStatus;
     priority?: number;
@@ -1030,6 +1036,26 @@ function IssueDetailsContent({
             <span className="text-muted-foreground">No description.</span>
           )}
         </div>
+      {isContainerIssue(issue) && childIssueCount > 0 ? (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Child issues</div>
+            <div className="text-xs text-muted-foreground">
+              {childIssueCount} descendant {childIssueCount === 1 ? "issue" : "issues"}
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => onViewChildren(issue)}
+          >
+            <Icon name="ListView" className="h-3.5 w-3.5" aria-hidden="true" />
+            View issues
+          </Button>
+        </div>
+      ) : null}
       <div className="mt-4 border-t border-border bg-card p-4">
         <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
           <label className="grid gap-2">
@@ -1114,6 +1140,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const [epicScopeId, setEpicScopeId] = useState<string | null>(null);
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
       typeof window === "undefined" ? undefined : window.localStorage,
@@ -1197,11 +1224,30 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     void loadDetail();
   }, [rpcProjectId, selectedId, refresh, workspacePathOverride]);
 
+  const epicScope = useMemo(
+    () =>
+      epicScopeId === null
+        ? null
+        : issues.find((issue) => issue.id === epicScopeId) ?? null,
+    [epicScopeId, issues],
+  );
+  const scopedIssues = useMemo(
+    () =>
+      epicScopeId === null
+        ? issues
+        : getDescendantWorkIssues(issues, epicScopeId),
+    [epicScopeId, issues],
+  );
+  const detailChildIssueCount = useMemo(
+    () => (detail ? getDescendantWorkIssues(issues, detail.id).length : 0),
+    [detail, issues],
+  );
+
   const visibleIssues = useMemo(() => {
     const statusFiltered =
       selectedStatuses.length === 0
-        ? issues
-        : issues.filter((issue) =>
+        ? scopedIssues
+        : scopedIssues.filter((issue) =>
             selectedStatuses.includes(issue.status as IssueStatus),
           );
     const priorityFiltered =
@@ -1216,10 +1262,10 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     return sortIssues(textFiltered, sortMode);
   }, [
     beadsQuery,
-    issues,
     query,
     selectedPriorities,
     selectedStatuses,
+    scopedIssues,
     sortMode,
   ]);
 
@@ -1232,6 +1278,17 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   function closeDetail() {
     setDetail(null);
     navigate.toPluginPanel("board", { subPath: "", replace: true });
+  }
+
+  function openEpicIssues(issue: Issue) {
+    setEpicScopeId(issue.id);
+    setViewMode("list");
+    closeDetail();
+  }
+
+  function returnToEpicProgress() {
+    setEpicScopeId(null);
+    setViewMode("epics");
   }
 
   async function createIssue(input: {
@@ -1292,12 +1349,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
           : [...STATUSES];
     if (
       selectedStatuses.length === 0 &&
-      issues.some((issue) => !STATUSES.includes(issue.status as IssueStatus))
+      scopedIssues.some((issue) => !STATUSES.includes(issue.status as IssueStatus))
     ) {
       columns.push(OTHER_STATUS);
     }
     return columns;
-  }, [issues, selectedStatuses]);
+  }, [scopedIssues, selectedStatuses]);
 
   if (settingsLoading) {
     return (
@@ -1352,7 +1409,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 type="button"
                 size="sm"
                 variant={viewMode === "epics" ? "secondary" : "outline"}
-                onClick={() => setViewMode("epics")}
+                onClick={returnToEpicProgress}
                 aria-pressed={viewMode === "epics"}
                 aria-label="Epic progress view"
               >
@@ -1500,7 +1557,49 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       {/* Content area */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mx-auto max-w-7xl">
-          {loading && visibleIssues.length === 0 ? (
+          {epicScope ? (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={returnToEpicProgress}
+                >
+                  <Icon name="ChevronLeft" className="h-3.5 w-3.5" aria-hidden="true" />
+                  Back to epic progress
+                </Button>
+                <span className="min-w-0 truncate text-sm font-medium">
+                  Issues in {epicScope.title}
+                </span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {visibleIssues.length} issues
+                </span>
+              </div>
+              {loading && visibleIssues.length === 0 ? (
+                <Card>
+                  <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                    Loading issues…
+                  </CardContent>
+                </Card>
+              ) : visibleIssues.length === 0 ? (
+                <Card>
+                  <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                    No child issues match this view.
+                  </CardContent>
+                </Card>
+              ) : viewMode === "kanban" ? (
+                <KanbanBoard
+                  issues={visibleIssues}
+                  onOpenIssue={openIssue}
+                  visibleColumns={visibleColumns}
+                />
+              ) : (
+                <IssueListView issues={visibleIssues} onOpenIssue={openIssue} />
+              )}
+            </>
+          ) : loading && visibleIssues.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center text-sm text-muted-foreground">
                 Loading issues…
@@ -1546,7 +1645,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
           </div>
           {detail ? (
             <div className="h-[min(70vh,32rem)] overflow-hidden sm:h-[calc(85vh-5rem)]">
-              <IssueDetailsContent issue={detail} onUpdate={updateIssue} />
+              <IssueDetailsContent
+                issue={detail}
+                onUpdate={updateIssue}
+                childIssueCount={detailChildIssueCount}
+                onViewChildren={openEpicIssues}
+              />
             </div>
           ) : (
             <div className="p-6 text-sm text-muted-foreground">Loading issue…</div>

@@ -178,6 +178,37 @@ export function buildEpicProgress(issues: readonly Issue[]): EpicProgress[] {
 }
 
 /**
+ * Return all descendant work issues for an epic or milestone in source order.
+ * Nested containers are traversed, while the container issues themselves are
+ * excluded from the returned list.
+ */
+export function getDescendantWorkIssues(
+  issues: readonly Issue[],
+  containerId: string,
+): Issue[] {
+  if (!issues || issues.length === 0 || !containerId) {
+    return [];
+  }
+
+  const issueMap = new Map<string, Issue>();
+  const childrenMap = new Map<string, Set<string>>();
+  for (const issue of issues) {
+    issueMap.set(issue.id, issue);
+    const parentId = issue.parent;
+    if (typeof parentId !== "string" || !parentId) continue;
+    if (!childrenMap.has(parentId)) childrenMap.set(parentId, new Set());
+    childrenMap.get(parentId)!.add(issue.id);
+  }
+
+  const descendantIds = collectDescendantWorkIds(
+    containerId,
+    issueMap,
+    childrenMap,
+  );
+  return issues.filter((issue) => descendantIds.has(issue.id));
+}
+
+/**
  * Return work issues (non-epic / non-milestone) that have no valid container
  * ancestor in the provided issue set.
  *

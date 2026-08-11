@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildEpicProgress,
   getUnassignedWorkIssues,
+  getDescendantWorkIssues,
   isContainerIssue,
   type EpicProgress,
 } from "./epic-progress";
@@ -189,6 +190,32 @@ describe("buildEpicProgress — nested descendants", () => {
     expect(epicB.total).toBe(2);
     expect(epicB.completed).toBe(2);
     expect(epicB.percentage).toBe(100);
+  });
+});
+
+describe("getDescendantWorkIssues", () => {
+  it("returns direct and nested work issues in source order", () => {
+    const issues: Issue[] = [
+      issue({ id: "epic-1", issue_type: "epic" }),
+      issue({ id: "t1", issue_type: "task", parent: "epic-1" }),
+      issue({ id: "milestone-1", issue_type: "milestone", parent: "epic-1" }),
+      issue({ id: "t2", issue_type: "task", parent: "milestone-1" }),
+      issue({ id: "other", issue_type: "task" }),
+    ];
+
+    expect(getDescendantWorkIssues(issues, "epic-1").map((item) => item.id)).toEqual([
+      "t1",
+      "t2",
+    ]);
+  });
+
+  it("returns an empty list for an unknown container", () => {
+    expect(
+      getDescendantWorkIssues(
+        [issue({ id: "t1", issue_type: "task", parent: "epic-1" })],
+        "missing",
+      ),
+    ).toEqual([]);
   });
 });
 
