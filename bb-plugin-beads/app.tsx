@@ -419,6 +419,36 @@ function FilterOption({
   );
 }
 
+function issueAgent(issue: Issue): string | null {
+  const assignee = issue.assignee?.trim();
+  if (assignee) return assignee;
+  if (issue.status === "in_progress") {
+    const owner = issue.owner?.trim();
+    if (owner) return owner;
+  }
+  return null;
+}
+
+function agentDisplayName(agent: string) {
+  const at = agent.indexOf("@");
+  return at > 0 ? agent.slice(0, at) : agent;
+}
+
+function AgentBadge({ issue }: { issue: Issue }) {
+  const agent = issueAgent(issue);
+  if (!agent) return null;
+  return (
+    <span
+      className="inline-flex max-w-32 shrink-0 items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+      title={`Claimed by ${agent}`}
+      aria-label={`Claimed by ${agent}`}
+    >
+      <Icon name="UserRound" className="h-3 w-3 shrink-0" aria-hidden="true" />
+      <span className="truncate">{agentDisplayName(agent)}</span>
+    </span>
+  );
+}
+
 function sortIssues(issues: readonly Issue[], sort: SortMode) {
   if (sort === "manual") return [...issues];
 
@@ -457,6 +487,7 @@ function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
         <span className="block truncate text-xs font-medium">{issue.title}</span>
       </span>
       <span className="flex shrink-0 items-center gap-2">
+        <AgentBadge issue={issue} />
         <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <PriorityIcon priority={issue.priority} className="h-3 w-3" />
@@ -486,6 +517,7 @@ function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
             {issue.issue_type}
           </span>
         ) : null}
+        <AgentBadge issue={issue} />
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <PriorityIcon priority={issue.priority} className="h-3 w-3" />
           P{issue.priority ?? 2}
@@ -988,6 +1020,7 @@ function DependencyGraphView({
                     <span className="truncate text-[11px] text-muted-foreground">
                       {issue.id}
                     </span>
+                    <AgentBadge issue={issue} />
                     <PriorityIcon
                       priority={issue.priority}
                       className="ml-auto h-3 w-3"
@@ -1699,6 +1732,7 @@ function IssueDetailsContent({
             {statusLabel(issue.status)}
           </span>
           <span className="text-xs text-muted-foreground">{issue.id}</span>
+          <AgentBadge issue={issue} />
         </div>
         <div className="mb-4 rounded-md bg-muted/30 p-3">
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
