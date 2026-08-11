@@ -895,7 +895,7 @@ function EpicNavigationRail({
   }, [progress, query, sortMode, statusFilter]);
 
   return (
-    <aside className="order-1 flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-3 @lg:sticky @lg:top-0 @lg:order-2 @lg:w-64 @lg:shrink-0">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-l border-border-hairline bg-background px-3 py-4 max-md:w-56">
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold">Epics</h2>
         <span className="text-xs tabular-nums text-muted-foreground">
@@ -938,7 +938,7 @@ function EpicNavigationRail({
           </select>
         </div>
       </div>
-      <div className="mt-3 min-h-0 space-y-1.5 overflow-y-auto @lg:max-h-[min(34rem,calc(100vh-12rem))]">
+      <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
         {visibleProgress.length > 0 ? (
           visibleProgress.map((entry) => (
             <button
@@ -992,9 +992,7 @@ function EpicWorkspace({
   visibleIssues,
   statusFilter,
   selectedEpicId,
-  railOpen,
   loading,
-  onSelectEpic,
   onBack,
   onOpenIssue,
 }: {
@@ -1002,9 +1000,7 @@ function EpicWorkspace({
   visibleIssues: Issue[];
   statusFilter: readonly IssueStatus[];
   selectedEpicId: string | null;
-  railOpen: boolean;
   loading: boolean;
-  onSelectEpic: (id: string) => void;
   onBack: () => void;
   onOpenIssue: (issue: Issue) => void;
 }) {
@@ -1066,13 +1062,6 @@ function EpicWorkspace({
           />
         )}
       </div>
-      {railOpen ? (
-        <EpicNavigationRail
-          issues={issues}
-          selectedEpicId={selectedEpicId}
-          onSelectEpic={onSelectEpic}
-        />
-      ) : null}
     </div>
   );
 }
@@ -1523,6 +1512,11 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     closeDetail();
   }
 
+  function openEpicFromRail(id: string) {
+    setEpicScopeId(id);
+    setViewMode("epics");
+  }
+
   function returnToEpicProgress() {
     setEpicScopeId(null);
     setEpicRailOpen(true);
@@ -1643,19 +1637,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               onOpenChange={setCreateOpen}
               onCreate={createIssue}
             />
-            {viewMode === "epics" ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                aria-label={epicRailOpen ? "Hide epic sidebar" : "Show epic sidebar"}
-                aria-pressed={epicRailOpen}
-                onClick={() => setEpicRailOpen((open) => !open)}
-              >
-                <Icon name="PanelRight" className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            ) : null}
             <div className="flex min-w-0 flex-1 @md:max-w-[28rem]">
               <Input
                 aria-label="Search Beads issues"
@@ -1710,6 +1691,17 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   List
                 </Button>
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                aria-label={epicRailOpen ? "Hide epic sidebar" : "Show epic sidebar"}
+                aria-pressed={epicRailOpen}
+                onClick={() => setEpicRailOpen((open) => !open)}
+              >
+                <Icon name="PanelRight" className="h-4 w-4" aria-hidden="true" />
+              </Button>
             </div>
           </div>
           <div className="mt-1.5 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1.5">
@@ -1813,17 +1805,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mx-auto max-w-7xl">
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto p-4">
+          <div className="mx-auto max-w-7xl">
           {viewMode === "epics" ? (
             <EpicWorkspace
               issues={issues}
               visibleIssues={visibleIssues}
               statusFilter={selectedStatuses}
               selectedEpicId={epicScopeId}
-              railOpen={epicRailOpen}
               loading={loading}
-              onSelectEpic={setEpicScopeId}
               onBack={returnToEpicProgress}
               onOpenIssue={openIssue}
             />
@@ -1855,7 +1846,15 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               onOpenIssue={openIssue}
             />
           )}
+          </div>
         </div>
+        {epicRailOpen ? (
+          <EpicNavigationRail
+            issues={issues}
+            selectedEpicId={epicScopeId}
+            onSelectEpic={openEpicFromRail}
+          />
+        ) : null}
       </div>
 
       {/* Detail Dialog */}
