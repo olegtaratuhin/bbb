@@ -1796,7 +1796,7 @@ function IssueDetailsContent({
           {issue.description ? (
             <Markdown
               content={issue.description}
-              className="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0"
+              className="m-0 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
             />
           ) : (
             <span className="text-muted-foreground">No description.</span>
@@ -1870,37 +1870,51 @@ function IssueDetailsContent({
         <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
           <label className="grid gap-2">
             Status
-            <select
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-              value={issue.status ?? "open"}
-              onChange={(event) => {
-                void onUpdate({
-                  status: event.target.value as IssueStatus,
-                });
-              }}
-            >
-              {STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {statusLabel(status)}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                className="h-9 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm"
+                value={issue.status ?? "open"}
+                onChange={(event) => {
+                  void onUpdate({
+                    status: event.target.value as IssueStatus,
+                  });
+                }}
+              >
+                {STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {statusLabel(status)}
+                  </option>
+                ))}
+              </select>
+              <Icon
+                name="ChevronDown"
+                className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </div>
           </label>
           <label className="grid gap-2">
             Priority
-            <select
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-              value={String(issue.priority ?? 2)}
-              onChange={(event) => {
-                void onUpdate({ priority: Number(event.target.value) });
-              }}
-            >
-              {[0, 1, 2, 3, 4].map((priority) => (
-                <option key={priority} value={priority}>
-                  P{priority}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                className="h-9 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm"
+                value={String(issue.priority ?? 2)}
+                onChange={(event) => {
+                  void onUpdate({ priority: Number(event.target.value) });
+                }}
+              >
+                {[0, 1, 2, 3, 4].map((priority) => (
+                  <option key={priority} value={priority}>
+                    P{priority}
+                  </option>
+                ))}
+              </select>
+              <Icon
+                name="ChevronDown"
+                className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </div>
           </label>
         </div>
         <form className="grid gap-3" onSubmit={saveText}>
