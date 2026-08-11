@@ -128,28 +128,7 @@ export function layoutDependencyGraph(
     byLayer.set(layer, bucket);
   }
 
-  const nodes: GraphNodePosition[] = [];
-  for (const [layer, layerIssues] of [...byLayer.entries()].sort(
-    ([a], [b]) => a - b,
-  )) {
-    layerIssues.sort((a, b) => a.id.localeCompare(b.id));
-    layerIssues.forEach((issue, index) => {
-      nodes.push({
-        issue,
-        layer,
-        x:
-          orientation === "horizontal"
-            ? 24 + layer * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP)
-            : 24 + index * (GRAPH_NODE_WIDTH + GRAPH_ROW_GAP),
-        y:
-          orientation === "horizontal"
-            ? 24 + index * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP)
-            : 24 + layer * (GRAPH_NODE_HEIGHT + GRAPH_COLUMN_GAP),
-      });
-    });
-  }
-
-  const maxLayer = Math.max(...nodes.map((node) => node.layer), 0);
+  const maxLayer = Math.max(...byLayer.keys(), 0);
   const maxRows = Math.max(
     ...[...byLayer.values()].map((layerIssues) => layerIssues.length),
     1,
@@ -158,16 +137,54 @@ export function layoutDependencyGraph(
   const layerHeight = GRAPH_NODE_HEIGHT + GRAPH_COLUMN_GAP;
   const rowWidth = GRAPH_NODE_WIDTH + GRAPH_ROW_GAP;
   const rowHeight = GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP;
+  const width =
+    orientation === "horizontal"
+      ? Math.max(680, 48 + (maxLayer + 1) * layerWidth)
+      : Math.max(420, 48 + maxRows * rowWidth);
+  const height =
+    orientation === "horizontal"
+      ? Math.max(260, 48 + maxRows * rowHeight)
+      : Math.max(260, 48 + (maxLayer + 1) * layerHeight);
+
+  const nodes: GraphNodePosition[] = [];
+  for (const [layer, layerIssues] of [...byLayer.entries()].sort(
+    ([a], [b]) => a - b,
+  )) {
+    layerIssues.sort((a, b) => a.id.localeCompare(b.id));
+    const layerContentSize =
+      orientation === "horizontal"
+        ? layerIssues.length * GRAPH_NODE_HEIGHT +
+          (layerIssues.length - 1) * GRAPH_ROW_GAP
+        : layerIssues.length * GRAPH_NODE_WIDTH +
+          (layerIssues.length - 1) * GRAPH_ROW_GAP;
+    const crossAxisOffset =
+      ((orientation === "horizontal" ? height : width) - layerContentSize) / 2;
+
+    layerIssues.forEach((issue, index) => {
+      nodes.push({
+        issue,
+        layer,
+        x:
+          orientation === "horizontal"
+            ? 24 + layer * layerWidth
+            : crossAxisOffset + index * rowWidth,
+        y:
+          orientation === "horizontal"
+            ? crossAxisOffset + index * rowHeight
+            : 24 + layer * layerHeight,
+      });
+    });
+  }
 
   return orientation === "horizontal"
     ? {
         nodes,
-        width: Math.max(680, 48 + (maxLayer + 1) * layerWidth),
-        height: Math.max(260, 48 + maxRows * rowHeight),
+        width,
+        height,
       }
     : {
         nodes,
-        width: Math.max(420, 48 + maxRows * rowWidth),
-        height: Math.max(260, 48 + (maxLayer + 1) * layerHeight),
+        width,
+        height,
       };
 }

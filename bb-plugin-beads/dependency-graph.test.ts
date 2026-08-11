@@ -78,7 +78,8 @@ describe("layoutDependencyGraph", () => {
     const positions = new Map(layout.nodes.map((node) => [node.issue.id, node]));
 
     expect(positions.get("B")?.x).toBeGreaterThan(positions.get("A")?.x ?? 0);
-    expect(positions.get("B")?.y).toBe(positions.get("A")?.y);
+    expect(positions.get("B")?.y).toBe(96);
+    expect(positions.get("A")?.y).toBe(positions.get("B")?.y);
   });
 
   it("rotates dependency flow vertically without changing its layers", () => {
@@ -94,6 +95,7 @@ describe("layoutDependencyGraph", () => {
     const positions = new Map(layout.nodes.map((node) => [node.issue.id, node]));
 
     expect(positions.get("B")?.y).toBeGreaterThan(positions.get("A")?.y ?? 0);
-    expect(positions.get("B")?.x).toBe(positions.get("A")?.x);
+    expect(positions.get("B")?.x).toBe(112);
+    expect(positions.get("A")?.x).toBe(positions.get("B")?.x);
   });
 });
