@@ -10,6 +10,9 @@ The **Beads** panel is available from the BB navigation for the selected
 project. It provides:
 
 - issue search and status filtering;
+- Kanban, list, and epic/milestone progress views;
+- epic and milestone completion cards with status breakdowns;
+- an unassigned-work section for issues without a container;
 - issue detail loading with status and priority controls;
 - editing title, description, and acceptance criteria;
 - creating a new issue with type, priority, and description;

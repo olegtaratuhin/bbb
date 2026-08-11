@@ -10,6 +10,11 @@ import {
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
+import {
+  buildEpicProgress,
+  getUnassignedWorkIssues,
+  type EpicProgress,
+} from "./epic-progress";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -43,10 +48,17 @@ const STATUSES = [
   "deferred",
   "closed",
 ] as const;
-const ISSUE_TYPES = ["task", "bug", "feature", "chore", "epic"];
+const ISSUE_TYPES = [
+  "task",
+  "bug",
+  "feature",
+  "chore",
+  "epic",
+  "milestone",
+];
 type IssueStatus = (typeof STATUSES)[number];
 
-type ViewMode = "kanban" | "list";
+type ViewMode = "kanban" | "list" | "epics";
 
 const STATUS_CONFIG: Record<
   IssueStatus,
@@ -300,6 +312,166 @@ function KanbanBoard({
         ))}
       </div>
     </>
+  );
+}
+
+function EpicProgressCard({
+  progress,
+  onOpenIssue,
+}: {
+  progress: EpicProgress;
+  onOpenIssue: (issue: Issue) => void;
+}) {
+  const typeLabel = progress.container.issue_type === "milestone"
+    ? "Milestone"
+    : "Epic";
+
+  return (
+    <button
+      type="button"
+      className="group flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      onClick={() => onOpenIssue(progress.container)}
+    >
+      <span className="flex min-w-0 items-center justify-between gap-3">
+        <span className="inline-flex shrink-0 items-center rounded-md bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {typeLabel}
+        </span>
+        <span className="truncate text-xs text-muted-foreground">
+          {progress.container.id}
+        </span>
+      </span>
+      <span className="line-clamp-2 text-sm font-semibold">
+        {progress.container.title}
+      </span>
+      <span className="flex items-baseline justify-between gap-3">
+        <span className="text-xs text-muted-foreground">
+          {progress.total === 0
+            ? "No child issues yet"
+            : `${progress.completed} of ${progress.total} issues complete`}
+        </span>
+        <span className="shrink-0 text-sm font-semibold tabular-nums">
+          {progress.percentage}%
+        </span>
+      </span>
+      <span
+        className="h-2 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={`${progress.container.title} completion`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress.percentage}
+      >
+        <span
+          className="block h-full rounded-full bg-primary transition-[width]"
+          style={{ width: `${progress.percentage}%` }}
+        />
+      </span>
+      <span className="flex flex-wrap gap-1.5">
+        {STATUSES.map((status) => {
+          const count = progress.statusCounts[status] ?? 0;
+          if (count === 0) return null;
+          return (
+            <span
+              key={status}
+              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${statusBadgeClass(status)}`}
+            >
+              {count} {statusLabel(status)}
+            </span>
+          );
+        })}
+      </span>
+    </button>
+  );
+}
+
+function EpicProgressView({
+  issues,
+  visibleIssues,
+  statusFilter,
+  onOpenIssue,
+}: {
+  issues: Issue[];
+  visibleIssues: Issue[];
+  statusFilter: string;
+  onOpenIssue: (issue: Issue) => void;
+}) {
+  const progress = useMemo(() => buildEpicProgress(issues), [issues]);
+  const unassignedIds = useMemo(
+    () => new Set(getUnassignedWorkIssues(issues).map((issue) => issue.id)),
+    [issues],
+  );
+  const visibleProgress = useMemo(
+    () =>
+      progress.filter(
+        (entry) =>
+          statusFilter === "all" ||
+          (entry.statusCounts[statusFilter] ?? 0) > 0,
+      ),
+    [progress, statusFilter],
+  );
+  const visibleUnassigned = visibleIssues.filter((issue) =>
+    unassignedIds.has(issue.id),
+  );
+
+  if (visibleProgress.length === 0 && visibleUnassigned.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-sm text-muted-foreground">
+          No epics, milestones, or unassigned work match this view.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-5">
+      {visibleProgress.length > 0 ? (
+        <section className="grid gap-3" aria-labelledby="epic-progress-heading">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2
+              id="epic-progress-heading"
+              className="text-sm font-semibold"
+            >
+              Epics and milestones
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              {visibleProgress.length} {visibleProgress.length === 1 ? "container" : "containers"}
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {visibleProgress.map((entry) => (
+              <EpicProgressCard
+                key={entry.container.id}
+                progress={entry}
+                onOpenIssue={onOpenIssue}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {visibleUnassigned.length > 0 ? (
+        <section className="grid gap-3" aria-labelledby="unassigned-heading">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="unassigned-heading" className="text-sm font-semibold">
+              Unassigned work
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              {visibleUnassigned.length} {visibleUnassigned.length === 1 ? "issue" : "issues"}
+            </span>
+          </div>
+          <div className="grid gap-2">
+            {visibleUnassigned.map((issue) => (
+              <IssueRow
+                key={issue.id}
+                issue={issue}
+                onOpen={() => onOpenIssue(issue)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }
 
@@ -631,7 +803,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     try {
       const result = await rpc.call("listIssues", {
         ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
-        ...(status === "all" ? {} : { status }),
         ...(beadsQuery ? { query: beadsQuery } : {}),
       });
       setIssues(result.issues as Issue[]);
@@ -660,16 +831,21 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   useEffect(() => {
     void loadIssues();
-  }, [rpcProjectId, status, refresh, workspacePathOverride, beadsQuery]);
+  }, [rpcProjectId, refresh, workspacePathOverride, beadsQuery]);
 
   useEffect(() => {
     void loadDetail();
   }, [rpcProjectId, selectedId, refresh, workspacePathOverride]);
 
-  const visibleIssues = useMemo(
-    () => (beadsQuery ? issues : issues.filter((issue) => issueMatches(issue, query))),
-    [beadsQuery, issues, query],
-  );
+  const visibleIssues = useMemo(() => {
+    const statusFiltered =
+      status === "all"
+        ? issues
+        : issues.filter((issue) => issue.status === status);
+    return beadsQuery
+      ? statusFiltered
+      : statusFiltered.filter((issue) => issueMatches(issue, query));
+  }, [beadsQuery, issues, query, status]);
 
   function openIssue(issue: Issue) {
     navigate.toPluginPanel("board", {
@@ -828,6 +1004,17 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 >
                   List
                 </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "epics" ? "secondary" : "ghost"}
+                  className="rounded-none border-l border-border"
+                  onClick={() => setViewMode("epics")}
+                  aria-pressed={viewMode === "epics"}
+                  aria-label="Epic progress view"
+                >
+                  Epics
+                </Button>
               </div>
               <Button
                 variant="outline"
@@ -869,7 +1056,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               onOpenIssue={openIssue}
               visibleColumns={visibleColumns}
             />
-          ) : (
+          ) : viewMode === "list" ? (
             <div className="grid gap-2">
               {visibleIssues.map((issue) => (
                 <IssueRow
@@ -879,6 +1066,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 />
               ))}
             </div>
+          ) : (
+            <EpicProgressView
+              issues={issues}
+              visibleIssues={visibleIssues}
+              statusFilter={status}
+              onOpenIssue={openIssue}
+            />
           )}
         </div>
       </div>
