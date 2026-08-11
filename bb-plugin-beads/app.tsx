@@ -232,7 +232,7 @@ function KanbanColumn({
     <details
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
-      className="group snap-start sm:flex sm:w-[clamp(12rem,16vw,15rem)] sm:min-w-[clamp(12rem,16vw,15rem)] sm:flex-none sm:flex-col sm:gap-2"
+      className="group snap-start sm:flex sm:flex-1 sm:min-w-[12rem] sm:flex-col sm:gap-2"
     >
       <summary
         className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
@@ -278,7 +278,7 @@ function KanbanBoard({
         role="region"
         aria-label="Kanban board"
       >
-        <div className="mx-auto flex w-max snap-x snap-mandatory gap-3">
+        <div className="mx-auto flex w-full min-w-[60rem] max-w-[80rem] snap-x snap-mandatory gap-3">
           {visibleColumns.map((status) => (
             <KanbanColumn
               key={status}
