@@ -1789,18 +1789,21 @@ function IssueDetailsContent({
           <AgentBadge issue={issue} showLabel />
           <AuthorBadge issue={issue} showLabel />
         </div>
-        <div className="mb-4 rounded-md bg-muted/30 p-3">
+        <div className="mb-4 rounded-md bg-muted/30 p-4">
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Description
           </div>
           {issue.description ? (
-            <Markdown content={issue.description} />
+            <Markdown
+              content={issue.description}
+              className="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0"
+            />
           ) : (
             <span className="text-muted-foreground">No description.</span>
           )}
         </div>
       {isContainerIssue(issue) && childIssueCount > 0 ? (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-border bg-card p-4">
           <div className="min-w-0">
             <div className="text-sm font-medium">Child issues</div>
             <div className="text-xs text-muted-foreground">
@@ -1819,7 +1822,7 @@ function IssueDetailsContent({
           </Button>
         </div>
       ) : null}
-      <div className="mb-4 rounded-md border border-border bg-card p-3">
+      <div className="mb-4 rounded-md border border-border bg-card p-4">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium">Dependencies</div>
