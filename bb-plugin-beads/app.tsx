@@ -2242,50 +2242,37 @@ function BeadsPanel({ subPath }: { subPath: string }) {
         <div className="w-full">
           <div className="flex min-w-0 items-center gap-2">
             <div
-              className="flex shrink-0 overflow-hidden rounded-md border border-border"
+              className="relative flex shrink-0 overflow-hidden rounded-md border border-border"
               role="group"
               aria-label="Issue scope"
             >
-              <Button
-                type="button"
-                size="sm"
-                variant={!epicScopeActive ? "secondary" : "ghost"}
-                className="rounded-none px-2.5"
-                aria-pressed={!epicScopeActive}
-                aria-label="Show all issues"
-                onClick={() => setEpicScopeEnabled(false)}
+              <select
+                aria-label="Issue scope"
+                className="h-8 max-w-48 appearance-none bg-transparent px-2 pr-7 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={epicScopeActive ? epicScopeId ?? "" : ""}
+                onChange={(event) => {
+                  const nextEpicId = event.target.value;
+                  setGraphFocusId(null);
+                  if (!nextEpicId) {
+                    setEpicScopeEnabled(false);
+                    return;
+                  }
+                  setEpicScopeId(nextEpicId);
+                  setEpicScopeEnabled(true);
+                }}
               >
-                All
-              </Button>
-              <div className="relative border-l border-border">
-                <select
-                  aria-label="Choose an epic scope"
-                  className="h-8 max-w-48 appearance-none rounded-none bg-transparent px-2 pr-7 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={epicScopeActive ? epicScopeId ?? "" : ""}
-                  disabled={epicOptions.length === 0}
-                  onChange={(event) => {
-                    const nextEpicId = event.target.value;
-                    if (!nextEpicId) return;
-                    setEpicScopeId(nextEpicId);
-                    setEpicScopeEnabled(true);
-                    setGraphFocusId(null);
-                  }}
-                >
-                  <option value="" disabled>
-                    Epic
+                <option value="">All issues</option>
+                {epicOptions.map((entry) => (
+                  <option key={entry.container.id} value={entry.container.id}>
+                    {entry.container.title} · {entry.total}
                   </option>
-                  {epicOptions.map((entry) => (
-                    <option key={entry.container.id} value={entry.container.id}>
-                      {entry.container.title} · {entry.total}
-                    </option>
-                  ))}
-                </select>
-                <Icon
-                  name="ChevronDown"
-                  className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
+                ))}
+              </select>
+              <Icon
+                name="ChevronDown"
+                className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
             </div>
             <div
               className="flex shrink-0 overflow-hidden rounded-md border border-border"
