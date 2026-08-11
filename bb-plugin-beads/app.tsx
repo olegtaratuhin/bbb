@@ -419,33 +419,65 @@ function FilterOption({
   );
 }
 
-function issueAgent(issue: Issue): string | null {
-  const assignee = issue.assignee?.trim();
-  if (assignee) return assignee;
-  if (issue.status === "in_progress") {
-    const owner = issue.owner?.trim();
-    if (owner) return owner;
-  }
-  return null;
+const KNOWN_AGENT_NAMES: Record<string, string> = {
+  codex: "Codex",
+  junie: "Junie",
+};
+
+function identityDisplayName(identity: string) {
+  const at = identity.indexOf("@");
+  const localPart = identity.slice(0, at > 0 ? at : identity.length);
+  return KNOWN_AGENT_NAMES[localPart.toLowerCase()] ?? localPart;
 }
 
-function agentDisplayName(agent: string) {
-  const at = agent.indexOf("@");
-  return at > 0 ? agent.slice(0, at) : agent;
-}
-
-function AgentBadge({ issue }: { issue: Issue }) {
-  const agent = issueAgent(issue);
-  if (!agent) return null;
+function IdentityBadge({
+  identity,
+  label,
+  showLabel = false,
+}: {
+  identity: string;
+  label: string;
+  showLabel?: boolean;
+}) {
   return (
     <span
       className="inline-flex max-w-32 shrink-0 items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-      title={`Claimed by ${agent}`}
-      aria-label={`Claimed by ${agent}`}
+      title={`${label}: ${identity}`}
+      aria-label={`${label}: ${identity}`}
     >
       <Icon name="UserRound" className="h-3 w-3 shrink-0" aria-hidden="true" />
-      <span className="truncate">{agentDisplayName(agent)}</span>
+      {showLabel ? <span className="shrink-0">{label}</span> : null}
+      <span className="truncate">{identityDisplayName(identity)}</span>
     </span>
+  );
+}
+
+function AgentBadge({
+  issue,
+  showLabel = false,
+}: {
+  issue: Issue;
+  showLabel?: boolean;
+}) {
+  const assignee = issue.assignee?.trim();
+  if (!assignee) return null;
+  const label = issue.status === "in_progress" ? "Claimed by" : "Assigned to";
+  return (
+    <IdentityBadge identity={assignee} label={label} showLabel={showLabel} />
+  );
+}
+
+function AuthorBadge({
+  issue,
+  showLabel = false,
+}: {
+  issue: Issue;
+  showLabel?: boolean;
+}) {
+  const author = issue.created_by?.trim();
+  if (!author) return null;
+  return (
+    <IdentityBadge identity={author} label="Created by" showLabel={showLabel} />
   );
 }
 
@@ -1732,7 +1764,8 @@ function IssueDetailsContent({
             {statusLabel(issue.status)}
           </span>
           <span className="text-xs text-muted-foreground">{issue.id}</span>
-          <AgentBadge issue={issue} />
+          <AgentBadge issue={issue} showLabel />
+          <AuthorBadge issue={issue} showLabel />
         </div>
         <div className="mb-4 rounded-md bg-muted/30 p-3">
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
