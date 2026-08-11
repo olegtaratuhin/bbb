@@ -139,10 +139,11 @@ function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
         {issue.title}
       </span>
       <span className="flex items-center gap-2">
-        <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[issue.status as IssueStatus]?.dot ?? "bg-muted-foreground"}`} />
-          {statusLabel(issue.status)}
-        </span>
+        {issue.issue_type ? (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-xs capitalize text-muted-foreground">
+            {issue.issue_type}
+          </span>
+        ) : null}
         <span className="text-xs text-muted-foreground">P{issue.priority ?? 2}</span>
       </span>
     </button>
@@ -171,29 +172,33 @@ function KanbanBoard({
   }, [issues, visibleColumns]);
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-2">
+    <div className="grid grid-cols-1 gap-4 pb-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
       {visibleColumns.map((status) => {
         const colIssues = columns.get(status) ?? [];
         const config = STATUS_CONFIG[status];
         return (
-          <div key={status} className="flex min-w-[18rem] flex-1 flex-col gap-2">
-            <div className={`rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide border-t-2 ${config.header}`}>
+          <div key={status} className="flex min-w-0 flex-col gap-2">
+            <div className={`flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide border-t-2 ${config.header}`}>
               <span className="flex items-center gap-2">
                 <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
                 {config.label}
               </span>
-              <span className="ml-1 text-muted-foreground">
-                ({colIssues.length})
-              </span>
+              <span className="text-muted-foreground">{colIssues.length}</span>
             </div>
             <div className="flex flex-col gap-2">
-              {colIssues.map((issue) => (
-                <IssueCard
-                  key={issue.id}
-                  issue={issue}
-                  onOpen={() => onOpenIssue(issue)}
-                />
-              ))}
+              {colIssues.length > 0 ? (
+                colIssues.map((issue) => (
+                  <IssueCard
+                    key={issue.id}
+                    issue={issue}
+                    onOpen={() => onOpenIssue(issue)}
+                  />
+                ))
+              ) : (
+                <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                  No {config.label.toLowerCase()} issues
+                </div>
+              )}
             </div>
           </div>
         );
@@ -668,13 +673,17 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <div className="shrink-0 border-b border-border p-4">
         <div className="mx-auto max-w-7xl">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-lg font-semibold">Beads</h1>
-              <p className="text-sm text-muted-foreground">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
                 {workspacePathOverride
-                  ? `Workspace override: ${workspacePathOverride}`
-                  : "Project issues backed by the local bd CLI."}
+                  ? "Issues for the configured workspace"
+                  : "Issues for the current BB project"}
               </p>
+              {workspacePathOverride ? (
+                <p className="truncate text-xs text-muted-foreground">
+                  Workspace override: {workspacePathOverride}
+                </p>
+              ) : null}
             </div>
             <CreateIssueDialog
               open={createOpen}
@@ -684,8 +693,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
           </div>
           {error ? <ErrorCard message={error} /> : null}
           {/* Toolbar: search, status filter, view toggle */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-1 gap-2 sm:flex-none sm:grid sm:grid-cols-[minmax(0,1fr)_10rem]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 gap-2 sm:flex-none sm:grid sm:grid-cols-[minmax(0,1fr)_10rem]">
               <Input
                 aria-label="Search Beads issues"
                 placeholder="Search issues"
@@ -735,11 +744,11 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   List
                 </Button>
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
                 {loading ? "Loading…" : `${visibleIssues.length} issues`}
               </span>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => setRefresh((value) => value + 1)}
               >
