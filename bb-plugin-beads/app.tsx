@@ -716,6 +716,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   type="button"
                   size="sm"
                   variant={viewMode === "kanban" ? "secondary" : "ghost"}
+                  className="rounded-none"
                   onClick={() => setViewMode("kanban")}
                   aria-pressed={viewMode === "kanban"}
                   aria-label="Kanban board view"
