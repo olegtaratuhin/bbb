@@ -75,6 +75,11 @@ type SortMode =
   | "updated_desc"
   | "created_desc"
   | "title_asc";
+type EpicSortMode =
+  | "progress_desc"
+  | "issues_desc"
+  | "updated_desc"
+  | "title_asc";
 
 type ViewMode = "kanban" | "list" | "epics";
 
@@ -139,6 +144,12 @@ const SORT_LABELS: Record<SortMode, string> = {
   priority_asc: "Priority (low → high)",
   updated_desc: "Updated (newest)",
   created_desc: "Created (newest)",
+  title_asc: "Title (A–Z)",
+};
+const EPIC_SORT_LABELS: Record<EpicSortMode, string> = {
+  progress_desc: "Progress (highest)",
+  issues_desc: "Issue count (highest)",
+  updated_desc: "Updated (newest)",
   title_asc: "Title (A–Z)",
 };
 
@@ -837,6 +848,235 @@ function EpicProgressView({
   );
 }
 
+function EpicNavigationRail({
+  issues,
+  selectedEpicId,
+  onSelectEpic,
+}: {
+  issues: Issue[];
+  selectedEpicId: string | null;
+  onSelectEpic: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortMode, setSortMode] = useState<EpicSortMode>("progress_desc");
+  const progress = useMemo(() => buildEpicProgress(issues), [issues]);
+  const visibleProgress = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return progress
+      .filter((entry) => {
+        const matchesQuery = normalizedQuery
+          ? `${entry.container.id} ${entry.container.title}`
+              .toLowerCase()
+              .includes(normalizedQuery)
+          : true;
+        const matchesStatus =
+          statusFilter === "all" ||
+          (entry.statusCounts[statusFilter] ?? 0) > 0;
+        return matchesQuery && matchesStatus;
+      })
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => {
+        let result = 0;
+        if (sortMode === "progress_desc") {
+          result = b.entry.percentage - a.entry.percentage;
+        } else if (sortMode === "issues_desc") {
+          result = b.entry.total - a.entry.total;
+        } else if (sortMode === "updated_desc") {
+          result = String(b.entry.container.updated_at ?? "").localeCompare(
+            String(a.entry.container.updated_at ?? ""),
+          );
+        } else {
+          result = a.entry.container.title.localeCompare(b.entry.container.title);
+        }
+        return result || a.index - b.index;
+      })
+      .map(({ entry }) => entry);
+  }, [progress, query, sortMode, statusFilter]);
+
+  return (
+    <aside className="order-1 flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-3 @lg:sticky @lg:top-0 @lg:order-2 @lg:w-64 @lg:shrink-0">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold">Epics</h2>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {visibleProgress.length} / {progress.length}
+        </span>
+      </div>
+      <div className="grid gap-2">
+        <Input
+          aria-label="Search epics"
+          placeholder="Search epics"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="h-8 text-xs"
+        />
+        <div className="grid grid-cols-2 gap-1.5">
+          <select
+            aria-label="Filter epics by child status"
+            className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2 text-xs"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="all">All status</option>
+            {STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {statusLabel(status)}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Sort epics"
+            className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2 text-xs"
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value as EpicSortMode)}
+          >
+            {(Object.keys(EPIC_SORT_LABELS) as EpicSortMode[]).map((option) => (
+              <option key={option} value={option}>
+                {EPIC_SORT_LABELS[option]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="mt-3 min-h-0 space-y-1.5 overflow-y-auto @lg:max-h-[min(34rem,calc(100vh-12rem))]">
+        {visibleProgress.length > 0 ? (
+          visibleProgress.map((entry) => (
+            <button
+              key={entry.container.id}
+              type="button"
+              className={`w-full rounded-md border p-2.5 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                selectedEpicId === entry.container.id
+                  ? "border-primary bg-secondary"
+                  : "border-border"
+              }`}
+              aria-pressed={selectedEpicId === entry.container.id}
+              onClick={() => onSelectEpic(entry.container.id)}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <StatusIcon
+                  status={entry.container.status}
+                  className="h-3 w-3 shrink-0"
+                />
+                <span className="truncate text-xs font-medium">
+                  {entry.container.title}
+                </span>
+              </span>
+              <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+                {entry.container.id}
+              </span>
+              <span className="mt-2 flex items-center gap-2">
+                <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                  <span
+                    className="block h-full rounded-full bg-primary"
+                    style={{ width: `${entry.percentage}%` }}
+                  />
+                </span>
+                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                  {entry.percentage}% · {entry.total}
+                </span>
+              </span>
+            </button>
+          ))
+        ) : (
+          <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+            No epics match these controls.
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function EpicWorkspace({
+  issues,
+  visibleIssues,
+  statusFilter,
+  selectedEpicId,
+  railOpen,
+  loading,
+  onSelectEpic,
+  onBack,
+  onOpenIssue,
+}: {
+  issues: Issue[];
+  visibleIssues: Issue[];
+  statusFilter: readonly IssueStatus[];
+  selectedEpicId: string | null;
+  railOpen: boolean;
+  loading: boolean;
+  onSelectEpic: (id: string) => void;
+  onBack: () => void;
+  onOpenIssue: (issue: Issue) => void;
+}) {
+  const selectedEpic = selectedEpicId
+    ? issues.find((issue) => issue.id === selectedEpicId) ?? null
+    : null;
+
+  return (
+    <div className="flex min-h-0 flex-col gap-4 @lg:flex-row">
+      <div className="order-2 min-w-0 flex-1 @lg:order-1">
+        {selectedEpic ? (
+          <>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
+                onClick={onBack}
+              >
+                <Icon name="ChevronLeft" className="h-3.5 w-3.5" aria-hidden="true" />
+                Back to epic progress
+              </Button>
+              <span className="min-w-0 truncate text-sm font-medium">
+                Issues in {selectedEpic.title}
+              </span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {visibleIssues.length} issues
+              </span>
+            </div>
+            {loading && visibleIssues.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  Loading issues…
+                </CardContent>
+              </Card>
+            ) : visibleIssues.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  No child issues match this view.
+                </CardContent>
+              </Card>
+            ) : (
+              <IssueListView issues={visibleIssues} onOpenIssue={onOpenIssue} />
+            )}
+          </>
+        ) : loading && issues.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-sm text-muted-foreground">
+              Loading epics…
+            </CardContent>
+          </Card>
+        ) : (
+          <EpicProgressView
+            issues={issues}
+            visibleIssues={visibleIssues}
+            statusFilter={statusFilter}
+            onOpenIssue={onOpenIssue}
+          />
+        )}
+      </div>
+      {railOpen ? (
+        <EpicNavigationRail
+          issues={issues}
+          selectedEpicId={selectedEpicId}
+          onSelectEpic={onSelectEpic}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function ErrorCard({ message }: { message: string }) {
   return (
     <Card className="border-destructive/50">
@@ -893,7 +1133,10 @@ function CreateIssueDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm">New issue</Button>
+        <Button size="sm">
+          <Icon name="Plus" className="h-4 w-4" aria-hidden="true" />
+          New issue
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -1141,6 +1384,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [refresh, setRefresh] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [epicScopeId, setEpicScopeId] = useState<string | null>(null);
+  const [epicRailOpen, setEpicRailOpen] = useState(true);
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
       typeof window === "undefined" ? undefined : window.localStorage,
@@ -1224,13 +1468,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     void loadDetail();
   }, [rpcProjectId, selectedId, refresh, workspacePathOverride]);
 
-  const epicScope = useMemo(
-    () =>
-      epicScopeId === null
-        ? null
-        : issues.find((issue) => issue.id === epicScopeId) ?? null,
-    [epicScopeId, issues],
-  );
   const scopedIssues = useMemo(
     () =>
       epicScopeId === null
@@ -1282,12 +1519,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   function openEpicIssues(issue: Issue) {
     setEpicScopeId(issue.id);
-    setViewMode("list");
+    setViewMode("epics");
     closeDetail();
   }
 
   function returnToEpicProgress() {
     setEpicScopeId(null);
+    setEpicRailOpen(true);
     setViewMode("epics");
   }
 
@@ -1390,11 +1628,34 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-2">
         <div className="mx-auto max-w-7xl">
           <div className="flex min-w-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              aria-label="Refresh issues"
+              onClick={() => setRefresh((value) => value + 1)}
+            >
+              <Icon name="RotateCcw" className="h-4 w-4" aria-hidden="true" />
+            </Button>
             <CreateIssueDialog
               open={createOpen}
               onOpenChange={setCreateOpen}
               onCreate={createIssue}
             />
+            {viewMode === "epics" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                aria-label={epicRailOpen ? "Hide epic sidebar" : "Show epic sidebar"}
+                aria-pressed={epicRailOpen}
+                onClick={() => setEpicRailOpen((open) => !open)}
+              >
+                <Icon name="PanelRight" className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            ) : null}
             <div className="flex min-w-0 flex-1 @md:max-w-[28rem]">
               <Input
                 aria-label="Search Beads issues"
@@ -1425,7 +1686,10 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   size="sm"
                   variant={viewMode === "kanban" ? "secondary" : "ghost"}
                   className="rounded-none"
-                  onClick={() => setViewMode("kanban")}
+                  onClick={() => {
+                    setEpicScopeId(null);
+                    setViewMode("kanban");
+                  }}
                   aria-pressed={viewMode === "kanban"}
                   aria-label="Kanban board view"
                 >
@@ -1436,22 +1700,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   size="sm"
                   variant={viewMode === "list" ? "secondary" : "ghost"}
                   className="rounded-none border-l border-border"
-                  onClick={() => setViewMode("list")}
+                  onClick={() => {
+                    setEpicScopeId(null);
+                    setViewMode("list");
+                  }}
                   aria-pressed={viewMode === "list"}
                   aria-label="List view"
                 >
                   List
                 </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Refresh issues"
-                onClick={() => setRefresh((value) => value + 1)}
-              >
-                <Icon name="RotateCcw" className="h-4 w-4" aria-hidden="true" />
-              </Button>
             </div>
           </div>
           <div className="mt-1.5 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1.5">
@@ -1557,48 +1815,18 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       {/* Content area */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mx-auto max-w-7xl">
-          {epicScope ? (
-            <>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={returnToEpicProgress}
-                >
-                  <Icon name="ChevronLeft" className="h-3.5 w-3.5" aria-hidden="true" />
-                  Back to epic progress
-                </Button>
-                <span className="min-w-0 truncate text-sm font-medium">
-                  Issues in {epicScope.title}
-                </span>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {visibleIssues.length} issues
-                </span>
-              </div>
-              {loading && visibleIssues.length === 0 ? (
-                <Card>
-                  <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                    Loading issues…
-                  </CardContent>
-                </Card>
-              ) : visibleIssues.length === 0 ? (
-                <Card>
-                  <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                    No child issues match this view.
-                  </CardContent>
-                </Card>
-              ) : viewMode === "kanban" ? (
-                <KanbanBoard
-                  issues={visibleIssues}
-                  onOpenIssue={openIssue}
-                  visibleColumns={visibleColumns}
-                />
-              ) : (
-                <IssueListView issues={visibleIssues} onOpenIssue={openIssue} />
-              )}
-            </>
+          {viewMode === "epics" ? (
+            <EpicWorkspace
+              issues={issues}
+              visibleIssues={visibleIssues}
+              statusFilter={selectedStatuses}
+              selectedEpicId={epicScopeId}
+              railOpen={epicRailOpen}
+              loading={loading}
+              onSelectEpic={setEpicScopeId}
+              onBack={returnToEpicProgress}
+              onOpenIssue={openIssue}
+            />
           ) : loading && visibleIssues.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center text-sm text-muted-foreground">
