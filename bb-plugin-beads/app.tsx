@@ -977,10 +977,20 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               {loading ? "Loading…" : `${visibleIssues.length} issues`}
             </span>
             <div className="ml-auto flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "epics" ? "secondary" : "outline"}
+                onClick={() => setViewMode("epics")}
+                aria-pressed={viewMode === "epics"}
+                aria-label="Epic progress view"
+              >
+                Epics
+              </Button>
               <div
                 className="flex overflow-hidden rounded-md border border-border"
                 role="group"
-                aria-label="Beads view"
+                aria-label="Issue view"
               >
                 <Button
                   type="button"
@@ -1003,17 +1013,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   aria-label="List view"
                 >
                   List
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={viewMode === "epics" ? "secondary" : "ghost"}
-                  className="rounded-none border-l border-border"
-                  onClick={() => setViewMode("epics")}
-                  aria-pressed={viewMode === "epics"}
-                  aria-label="Epic progress view"
-                >
-                  Epics
                 </Button>
               </div>
               <Button
