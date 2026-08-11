@@ -57,6 +57,8 @@ const ISSUE_TYPES = [
   "milestone",
 ];
 type IssueStatus = (typeof STATUSES)[number];
+const OTHER_STATUS = "__other" as const;
+type BoardStatus = IssueStatus | typeof OTHER_STATUS;
 
 type ViewMode = "kanban" | "list" | "epics";
 
@@ -96,17 +98,38 @@ const STATUS_CONFIG: Record<
   },
 };
 
+const OTHER_STATUS_CONFIG = {
+  label: "Other",
+  dot: "bg-violet-500",
+  badge:
+    "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800",
+  header: "border-t-violet-500",
+};
+
 const ISSUE_COUNT_BADGE_CLASS =
   "inline-flex h-8 items-center rounded-md bg-muted px-2 text-xs text-muted-foreground";
 const COLUMN_COUNT_BADGE_CLASS =
   "inline-flex h-4 min-w-4 items-center justify-center rounded bg-muted px-1.5 text-[11px] leading-4 text-muted-foreground";
 
 function statusLabel(status: string | undefined) {
-  return STATUS_CONFIG[status as IssueStatus]?.label ?? "unknown";
+  const config = STATUS_CONFIG[status as IssueStatus];
+  if (config) return config.label;
+  if (!status?.trim()) return "Unknown";
+  return status
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function statusBadgeClass(status: string | undefined) {
-  return STATUS_CONFIG[status as IssueStatus]?.badge ?? "bg-muted text-muted-foreground border-border";
+  return (
+    STATUS_CONFIG[status as IssueStatus]?.badge ??
+    OTHER_STATUS_CONFIG.badge
+  );
+}
+
+function statusDotClass(status: string | undefined) {
+  return STATUS_CONFIG[status as IssueStatus]?.dot ?? OTHER_STATUS_CONFIG.dot;
 }
 
 function issueMatches(issue: Issue, query: string) {
@@ -149,7 +172,7 @@ function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
       </span>
       <span className="flex shrink-0 items-center gap-2">
         <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[issue.status as IssueStatus]?.dot ?? "bg-muted-foreground"}`} />
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusDotClass(issue.status)}`} />
           {statusLabel(issue.status)}
         </span>
         <span className="text-xs text-muted-foreground">P{issue.priority ?? 2}</span>
@@ -190,8 +213,9 @@ function KanbanColumnBody({
 }: {
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
-  status: IssueStatus;
+  status: BoardStatus;
 }) {
+  const config = status === OTHER_STATUS ? OTHER_STATUS_CONFIG : STATUS_CONFIG[status];
   return (
     <div className="flex flex-col gap-2">
       {issues.length > 0 ? (
@@ -204,7 +228,7 @@ function KanbanColumnBody({
         ))
       ) : (
         <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-          No {STATUS_CONFIG[status].label.toLowerCase()} issues
+          No {config.label.toLowerCase()} issues
         </div>
       )}
     </div>
@@ -218,9 +242,9 @@ function KanbanColumn({
 }: {
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
-  status: IssueStatus;
+  status: BoardStatus;
 }) {
-  const config = STATUS_CONFIG[status];
+  const config = status === OTHER_STATUS ? OTHER_STATUS_CONFIG : STATUS_CONFIG[status];
   const [expanded, setExpanded] = useState(() => issues.length > 0);
   const headerClass = `flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide border-t-2 ${config.header}`;
   const header = (
@@ -244,14 +268,14 @@ function KanbanColumn({
     <details
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
-      className="group snap-start sm:flex sm:flex-1 sm:min-w-[12rem] sm:flex-col sm:gap-2"
+      className="group snap-start @md:flex @md:flex-1 @md:min-w-[12rem] @md:flex-col @md:gap-2"
     >
       <summary
         className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
       >
         {header}
       </summary>
-      <div className="mt-2 sm:mt-0">
+      <div className="mt-2 @md:mt-0">
         <KanbanColumnBody
           issues={issues}
           onOpenIssue={onOpenIssue}
@@ -269,13 +293,15 @@ function KanbanBoard({
 }: {
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
-  visibleColumns: readonly IssueStatus[];
+  visibleColumns: readonly BoardStatus[];
 }) {
   const columns = useMemo(() => {
-    const map = new Map<IssueStatus, Issue[]>();
+    const map = new Map<BoardStatus, Issue[]>();
     visibleColumns.forEach((s) => map.set(s, []));
     issues.forEach((issue) => {
-      const bucket = issue.status as IssueStatus;
+      const bucket = STATUSES.includes(issue.status as IssueStatus)
+        ? (issue.status as IssueStatus)
+        : OTHER_STATUS;
       if (map.has(bucket)) {
         map.get(bucket)!.push(issue);
       }
@@ -286,7 +312,7 @@ function KanbanBoard({
   return (
     <>
       <div
-        className="hidden overflow-x-auto pb-2 sm:block"
+        className="hidden overflow-x-auto pb-2 @md:block"
         role="region"
         aria-label="Kanban board"
       >
@@ -301,7 +327,7 @@ function KanbanBoard({
           ))}
         </div>
       </div>
-      <div className="flex flex-col gap-2 sm:hidden">
+      <div className="flex flex-col gap-2 @md:hidden">
         {visibleColumns.map((status) => (
           <KanbanColumn
             key={status}
@@ -312,6 +338,64 @@ function KanbanBoard({
         ))}
       </div>
     </>
+  );
+}
+
+function IssueListView({
+  issues,
+  onOpenIssue,
+}: {
+  issues: Issue[];
+  onOpenIssue: (issue: Issue) => void;
+}) {
+  const groups = useMemo(
+    () => {
+      const knownGroups = STATUSES.map((status) => ({
+        status,
+        issues: issues.filter((issue) => issue.status === status),
+      })).filter((group) => group.issues.length > 0);
+      const otherIssues = issues.filter(
+        (issue) => !STATUSES.includes(issue.status as IssueStatus),
+      );
+      return otherIssues.length > 0
+        ? [...knownGroups, { status: OTHER_STATUS, issues: otherIssues }]
+        : knownGroups;
+    },
+    [issues],
+  );
+
+  return (
+    <div className="grid gap-3">
+      {groups.map((group) => {
+        const config =
+          group.status === OTHER_STATUS
+            ? OTHER_STATUS_CONFIG
+            : STATUS_CONFIG[group.status];
+        return (
+          <section key={group.status} aria-labelledby={`list-${group.status}`}>
+            <div
+              id={`list-${group.status}`}
+              className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-hairline bg-background px-1.5 pb-1.5 pt-1 text-xs font-semibold"
+            >
+              <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+              {config.label}
+              <span className="font-normal tabular-nums text-muted-foreground">
+                {group.issues.length}
+              </span>
+            </div>
+            <div className="grid gap-1.5 pt-1.5">
+              {group.issues.map((issue) => (
+                <IssueRow
+                  key={issue.id}
+                  issue={issue}
+                  onOpen={() => onOpenIssue(issue)}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -908,10 +992,20 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   // Determine which columns to show based on status filter
   const visibleColumns = useMemo(() => {
-    if (status === "all") return STATUSES;
-    const filtered = status as IssueStatus;
-    return STATUSES.includes(filtered) ? [filtered] : STATUSES;
-  }, [status]);
+    const columns: BoardStatus[] =
+      status === "all"
+        ? [...STATUSES]
+        : STATUSES.includes(status as IssueStatus)
+          ? [status as IssueStatus]
+          : [...STATUSES];
+    if (
+      status === "all" &&
+      issues.some((issue) => !STATUSES.includes(issue.status as IssueStatus))
+    ) {
+      columns.push(OTHER_STATUS);
+    }
+    return columns;
+  }, [issues, status]);
 
   if (settingsLoading) {
     return (
@@ -942,26 +1036,27 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="@container flex h-full flex-col">
       {/* Header */}
-      <div className="shrink-0 border-b border-border p-4">
+      <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-2">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <CreateIssueDialog
               open={createOpen}
               onOpenChange={setCreateOpen}
               onCreate={createIssue}
             />
-            <div className="flex min-w-0 flex-[1_1_22rem] gap-2 sm:grid sm:max-w-[28rem] sm:grid-cols-[minmax(0,1fr)_10rem]">
+            <div className="flex min-w-0 flex-1 gap-1.5 @md:grid @md:max-w-[28rem] @md:grid-cols-[minmax(0,1fr)_9rem]">
               <Input
                 aria-label="Search Beads issues"
                 placeholder="Search issues or query"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                className="min-w-0"
               />
               <select
                 aria-label="Filter by status"
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2.5 text-xs"
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
               >
@@ -1016,13 +1111,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 </Button>
               </div>
               <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
                 aria-label="Refresh issues"
                 onClick={() => setRefresh((value) => value + 1)}
               >
                 <Icon name="RotateCcw" className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Refresh</span>
               </Button>
             </div>
           </div>
@@ -1056,15 +1151,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               visibleColumns={visibleColumns}
             />
           ) : viewMode === "list" ? (
-            <div className="grid gap-2">
-              {visibleIssues.map((issue) => (
-                <IssueRow
-                  key={issue.id}
-                  issue={issue}
-                  onOpen={() => openIssue(issue)}
-                />
-              ))}
-            </div>
+            <IssueListView issues={visibleIssues} onOpenIssue={openIssue} />
           ) : (
             <EpicProgressView
               issues={issues}
