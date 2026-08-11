@@ -13,6 +13,7 @@ export { validate } from "./validate";
 export { complete } from "./completion";
 export { highlight } from "./highlight";
 export * from "./mobile-contract";
+export * from "./mobile-assist";
 
 export function analyze(source: string): QueryAnalysis {
   const lexed = lex(source);

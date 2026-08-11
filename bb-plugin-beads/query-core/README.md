@@ -46,6 +46,14 @@ pixel minimum touch targets, and keeps incomplete/invalid queries recoverable.
 Builder rows omit empty conditions and preserve explicit boolean connectors.
 `MOBILE_QUERY_ASSIST_EXAMPLES` contains deterministic adapter scenarios.
 
+The mobile model in `mobile-assist.ts` builds on that contract without a UI
+dependency. `projectQuery(source, cursor)` returns analysis, input state,
+completion sections, and the active UTF-16 replacement span. Field, operator,
+and value picker data comes from `FIELD_DEFINITIONS`. Structured clients can
+use `createEmptyRow`, `updateRowField`, `updateRowOperator`, `updateRowValue`,
+`validateRows`, and `serializeRows`; built-in query presets are exposed through
+`BUILT_IN_PRESETS` and `serializePreset`.
+
 ## Compatibility contract
 
 The compatibility authority is the upstream Beads query package:
