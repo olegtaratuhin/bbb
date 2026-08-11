@@ -33,6 +33,7 @@
     "types",
     "components",
     "lib",
-    "hooks"
+    "hooks",
+    "query-core"
   ]
 }
