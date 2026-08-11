@@ -11,6 +11,7 @@ import {
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import {
   Card,
   CardContent,
@@ -765,7 +766,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <div className="shrink-0 border-b border-border p-4">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex min-w-0 flex-1 basis-full gap-2 sm:basis-[22rem] sm:grid sm:grid-cols-[minmax(0,1fr)_10rem]">
+            <CreateIssueDialog
+              open={createOpen}
+              onOpenChange={setCreateOpen}
+              onCreate={createIssue}
+            />
+            <div className="flex min-w-0 flex-[1_1_22rem] gap-2 sm:grid sm:max-w-[28rem] sm:grid-cols-[minmax(0,1fr)_10rem]">
               <Input
                 aria-label="Search Beads issues"
                 placeholder="Search issues"
@@ -786,7 +792,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 ))}
               </select>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               <div
                 className="flex overflow-hidden rounded-md border border-border"
                 role="group"
@@ -821,15 +827,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               <Button
                 variant="outline"
                 size="sm"
+                aria-label="Refresh issues"
                 onClick={() => setRefresh((value) => value + 1)}
               >
-                Refresh
+                <Icon name="RotateCcw" className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
-              <CreateIssueDialog
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-                onCreate={createIssue}
-              />
             </div>
           </div>
           {error ? (
