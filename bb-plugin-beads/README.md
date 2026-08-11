@@ -18,6 +18,108 @@ project. It provides:
 - creating a new issue with type, priority, and description;
 - explicit refresh after changes.
 
+## Query Language
+
+The search input supports two modes:
+
+1. **Ordinary text search** — typing plain keywords (e.g., `login fix`) triggers
+   a free-text search against issue titles, descriptions, and notes. No
+   special syntax is recognized; no validation or completion is active.
+2. **Query mode** — as soon as the lexer detects a comparison operator (`=`,
+   `!=`, `<`, `<=`, `>`, `>=`), a boolean keyword (`AND`, `OR`, `NOT`), or
+   a parenthesis, the input switches to structured-query mode. In this mode
+   the full query grammar applies, with completion, syntax highlighting, and
+   live diagnostics.
+
+The mode switch is automatic and transparent — the same `analyze()` call
+drives both paths. A query that contains only identifiers and strings with
+no operators stays in text-search mode.
+
+### Supported syntax
+
+```
+comparison := field operator value
+operator   := '=' | '!=' | '<' | '<=' | '>' | '>='
+```
+
+Comparisons are combined with `AND`, `OR`, `NOT` (case-insensitive) and
+grouped with parentheses. Examples of **valid** queries:
+
+- `status=open`
+- `type=bug AND priority=0`
+- `status!=closed OR assignee=none`
+- `NOT (status=closed)`
+- `updated>7d`
+- `created>=2025-01-15`
+- `title="exact phrase"`
+- `metadata.Release=stable`
+- `has_metadata_key=Release`
+
+Examples of **invalid** queries (caught by local validation):
+
+- `status=not-a-status` — enum value not recognized
+- `pinned>maybe` — `pinned` only supports `=` / `!=`; value is not boolean
+- `priority=9` — priority must be 0–4
+- `unknown=value` — field not in the schema
+- `updated=not-a-date` — not a recognized date or duration
+
+### Fields and values
+
+| Field              | Kind       | Operators     | Notes                                          |
+| ------------------ | ---------- | ------------- | ------------------------------------------------ |
+| `status`           | enum       | `=`, `!=`      | `open`, `in_progress`, `blocked`, `deferred`, `closed` |
+| `priority`         | number     | `=`, `<`, `<=`, `>`, `>=` | 0 (highest) – 4                         |
+| `type`             | enum       | `=`, `!=`      | `bug`, `feature`, `task`, `epic`, `chore`, `decision` |
+| `assignee`         | text       | `=`            | `none` for unassigned                           |
+| `owner`            | text       | `=`            |                                                 |
+| `label` (`labels`) | text       | `=`            | `none` for unlabeled                            |
+| `title`            | text       | `=`            | Text search in title                            |
+| `description` (`desc`) | text   | `=`            | Text search in description                      |
+| `notes`            | text       | `=`            | Text search in notes                            |
+| `created` (`created_at`) | date | `=`, `<`, `<=`, `>`, `>=` | Date or duration (`7d`, `24h`, `2w`, `1m`, `1y`) or natural-language date (`today`, `tomorrow`, `yesterday`) |
+| `updated` (`updated_at`) | date | `=`, `<`, `<=`, `>`, `>=` | Same as `created`                         |
+| `started` (`started_at`) | date | `<`, `<=`, `>`, `>=` | First transition to in_progress          |
+| `closed` (`closed_at`) | date   | `<`, `<=`, `>`, `>=` | Same as `created`                         |
+| `id`               | identifier | `=`, `!=`     | Trailing wildcard supported (`bb-*`)            |
+| `spec` (`spec_id`) | identifier | `=`, `!=`     | Trailing wildcard supported                     |
+| `pinned`           | boolean    | `=`            | `true`, `false`, `yes`, `no`, `1`, `0`          |
+| `ephemeral`        | boolean    | `=`            | Same as `pinned`                                |
+| `template`         | boolean    | `=`            | Same as `pinned`                                |
+| `parent`           | identifier | `=`           | Parent issue ID                                 |
+| `mol_type`         | enum       | `=`           | `swarm`, `patrol`, `work`                       |
+| `metadata.<key>`   | text       | `=`           | Dynamic; key preserves case                     |
+| `has_metadata_key` | identifier | `=`           | Tests for key presence                          |
+
+Values may be identifiers, single- or double-quoted strings (with `\n`,
+`\t`, `\\` escapes), numbers, durations (`7d`, `24h`, `2w`, `1m`, `1y`),
+ISO dates (`2025-01-15`), or natural-language dates.
+
+### Completion, highlighting, and live diagnostics
+
+- **Completion** triggers at field, operator, and value positions. Typing
+  `sta` offers `status`; after `status ` the six operators appear; after
+  `status=` the enum values appear. Date fields suggest templates like
+  `today`, `tomorrow`, `7d`. Completions respect the cursor position and
+  partially typed tokens, replacing only the current token span.
+- **Highlighting** colour-codes tokens in query mode: fields (sky),
+  operators (violet), keywords (amber bold), strings (emerald), numbers/
+  durations/dates (orange), punctuation (muted), and invalid characters
+  (wavy red underline).
+- **Live diagnostics** surface validation errors as the user types. Only
+  errors are shown in the UI; warnings and info are reserved for future use.
+  The first error is displayed beneath the input. Diagnostics include the
+  diagnostic code, a human-readable message, and the exact UTF-16 span so
+  editors can underline the problematic text.
+
+### Backend validation safety
+
+Before any query reaches `bd query`, the plugin runs `analyze()` locally.
+If the combined lexer + parser + schema validator produces even one error
+diagnostic, the call throws and **no CLI invocation occurs**. This guards
+against sending malformed expressions to the backend. When a query passes
+local validation, it is wrapped in parentheses and combined with any
+active status/priority filter clauses before `bd query` execution.
+
 The panel follows the project currently selected in BB. Its resolution order
 is:
 

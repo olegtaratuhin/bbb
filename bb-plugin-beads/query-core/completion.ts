@@ -88,7 +88,8 @@ export function complete(tokens: readonly Token[], source: string, cursor = sour
 
   const operatorContext = before?.kind === "identifier" && (!previous || !["equals", "not-equals", "less", "less-equals", "greater", "greater-equals"].includes(previous.kind));
   if (operatorContext) {
-    return operatorItems.map((operator) => ({
+    const operators = fieldDefinition(before.value)?.operators ?? operatorItems;
+    return operators.map((operator) => ({
       label: operator,
       insertText: operator,
       kind: "operator" as const,

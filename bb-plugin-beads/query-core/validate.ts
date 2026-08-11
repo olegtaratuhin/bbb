@@ -70,7 +70,7 @@ function validateComparison(node: ComparisonNode): Diagnostic[] {
       valueTo,
     ));
   }
-  if (definition.valueKind === "number" && (!/^\d+$/.test(node.value) || Number(node.value) < 0 || Number(node.value) > 4)) {
+  if (definition.valueKind === "number" && (!/^[+-]?\d+$/.test(node.value) || Number(node.value) < 0 || Number(node.value) > 4)) {
     diagnostics.push(diagnostic("invalid-number", "Priority must be an integer from 0 to 4", valueFrom, valueTo));
   }
   if (definition.valueKind === "boolean" && !/^(?:true|false|yes|no|1|0)$/i.test(node.value)) {

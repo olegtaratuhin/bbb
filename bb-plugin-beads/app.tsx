@@ -17,8 +17,7 @@ import {
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
-import { type CompletionItem, type HighlightSpan } from "./query-core";
-import { applyCompletion, createQueryEditorModel } from "./query-editor-model";
+import { QueryInput } from "./query-input";
 import {
   describeQueryExecution,
   QUERY_EXECUTION_DEBOUNCE_MS,
@@ -192,130 +191,6 @@ function issueMatches(issue: Issue, query: string) {
   return `${issue.id} ${issue.title} ${issue.description ?? ""}`
     .toLowerCase()
     .includes(normalizedQuery);
-}
-
-const HIGHLIGHT_CLASSES: Record<HighlightSpan["kind"], string> = {
-  field: "text-sky-600 dark:text-sky-400",
-  operator: "text-violet-600 dark:text-violet-400",
-  keyword: "font-semibold text-amber-600 dark:text-amber-400",
-  string: "text-emerald-600 dark:text-emerald-400",
-  number: "text-orange-600 dark:text-orange-400",
-  duration: "text-orange-600 dark:text-orange-400",
-  date: "text-orange-600 dark:text-orange-400",
-  identifier: "text-foreground",
-  punctuation: "text-muted-foreground",
-  invalid: "underline decoration-destructive decoration-wavy text-destructive",
-};
-
-function QueryInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [focused, setFocused] = useState(false);
-  const [cursor, setCursor] = useState(value.length);
-  const editorModel = useMemo(
-    () => createQueryEditorModel(value, cursor),
-    [cursor, value],
-  );
-  const queryMode = editorModel.queryMode;
-  const queryHighlights = editorModel.highlights;
-  const suggestions = focused ? editorModel.completions.slice(0, 8) : [];
-  const diagnostics = editorModel.diagnostics;
-
-  function updateCursor() {
-    setCursor(inputRef.current?.selectionStart ?? value.length);
-  }
-
-  function acceptSuggestion(item: CompletionItem) {
-    const next = applyCompletion(value, item);
-    onChange(next.source);
-    setCursor(next.cursor);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(next.cursor, next.cursor);
-    });
-  }
-
-  let highlightedOffset = 0;
-  const highlightedContent: ReactNode[] = [];
-  for (const [index, span] of queryHighlights.entries()) {
-    if (span.from > highlightedOffset) {
-      highlightedContent.push(
-        <span key={`gap-${index}`}>{value.slice(highlightedOffset, span.from)}</span>,
-      );
-    }
-    highlightedContent.push(
-      <span key={`${span.from}-${span.to}`} className={HIGHLIGHT_CLASSES[span.kind]}>
-        {value.slice(span.from, span.to)}
-      </span>,
-    );
-    highlightedOffset = span.to;
-  }
-  if (highlightedOffset < value.length) {
-    highlightedContent.push(<span key="tail">{value.slice(highlightedOffset)}</span>);
-  }
-
-  return (
-    <div className="relative min-w-0 flex-1">
-      {queryMode ? (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-[1] flex items-center overflow-hidden whitespace-pre px-3 py-1 text-sm"
-        >
-          {highlightedContent}
-        </div>
-      ) : null}
-      <Input
-        ref={inputRef}
-        aria-label="Search Beads issues"
-        aria-describedby={diagnostics.length > 0 ? "beads-query-diagnostics" : undefined}
-        placeholder="Search issues or query"
-        value={value}
-        onFocus={() => {
-          setFocused(true);
-          updateCursor();
-        }}
-        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
-        onClick={updateCursor}
-        onKeyUp={updateCursor}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setCursor(event.target.selectionStart ?? event.target.value.length);
-        }}
-        className={`h-8 min-w-0 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
-      />
-      {focused && suggestions.length > 0 ? (
-        <div
-          role="listbox"
-          aria-label="Beads query completions"
-          className="absolute left-0 right-0 top-9 z-30 grid max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md"
-        >
-          {suggestions.map((item) => (
-            <button
-              key={`${item.kind}-${item.label}`}
-              type="button"
-              role="option"
-              className="flex items-center justify-between gap-3 rounded px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => acceptSuggestion(item)}
-            >
-              <span>{item.label}</span>
-              {item.detail ? <span className="text-muted-foreground">{item.detail}</span> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {diagnostics.length > 0 ? (
-        <div id="beads-query-diagnostics" className="mt-1 truncate text-[11px] text-destructive" role="alert">
-          {diagnostics[0]?.message}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 function StatusIcon({

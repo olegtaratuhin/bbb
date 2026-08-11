@@ -163,14 +163,7 @@ describe("Beads query editor projections", () => {
 
   it("completes fields, operators, enum values, and date templates", () => {
     expect(completions("sta").map((item) => item.label)).toContain("status");
-    expect(completions("status ").map((item) => item.label)).toEqual([
-      "=",
-      "!=",
-      "<",
-      "<=",
-      ">",
-      ">=",
-    ]);
+    expect(completions("status ").map((item) => item.label)).toEqual(["=", "!="]);
     expect(completions("status=").map((item) => item.label)).toContain("open");
     expect(completions("updated=").map((item) => item.label)).toContain("tomorrow");
   });

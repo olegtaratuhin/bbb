@@ -12,6 +12,14 @@ const allComparisons: readonly ComparisonOperator[] = [
   ">",
   ">=",
 ];
+const timeComparisons: readonly ComparisonOperator[] = [
+  "=",
+  "<",
+  "<=",
+  ">",
+  ">=",
+];
+const openTimeComparisons: readonly ComparisonOperator[] = ["<", "<=", ">", ">="];
 const equality: readonly ComparisonOperator[] = ["=", "!="];
 const onlyEquals: readonly ComparisonOperator[] = ["="];
 
@@ -37,15 +45,15 @@ function field(
 
 /** Compatibility catalog derived from Beads' query parser/evaluator. */
 export const FIELD_DEFINITIONS: readonly FieldDefinition[] = [
-  field("status", "Status", "Stored issue status", "enum", allComparisons, [
+  field("status", "Status", "Stored issue status", "enum", equality, [
     "open",
     "in_progress",
     "blocked",
     "deferred",
     "closed",
   ]),
-  field("priority", "Priority", "Priority level from 0 (highest) to 4", "number"),
-  field("type", "Type", "Issue type", "enum", allComparisons, [
+  field("priority", "Priority", "Priority level from 0 (highest) to 4", "number", ["=", "<", "<=", ">", ">="]),
+  field("type", "Type", "Issue type", "enum", equality, [
     "bug",
     "feature",
     "task",
@@ -53,21 +61,21 @@ export const FIELD_DEFINITIONS: readonly FieldDefinition[] = [
     "chore",
     "decision",
   ]),
-  field("assignee", "Assignee", "Assigned user; use none for unassigned", "text"),
-  field("owner", "Owner", "Issue owner", "text"),
-  field("label", "Label", "Issue label; use none for unlabeled", "text", allComparisons, undefined, ["labels"]),
-  field("title", "Title", "Search in the issue title", "text"),
-  field("description", "Description", "Search in the description", "text", allComparisons, undefined, ["desc"]),
-  field("notes", "Notes", "Search in issue notes", "text"),
-  field("created", "Created", "Creation date or relative time", "date", allComparisons, undefined, ["created_at"]),
-  field("updated", "Updated", "Last update date or relative time", "date", allComparisons, undefined, ["updated_at"]),
-  field("started", "Started", "First transition to in progress", "date"),
-  field("closed", "Closed", "Close date or relative time", "date", allComparisons, undefined, ["closed_at"]),
+  field("assignee", "Assignee", "Assigned user; use none for unassigned", "text", onlyEquals),
+  field("owner", "Owner", "Issue owner", "text", onlyEquals),
+  field("label", "Label", "Issue label; use none for unlabeled", "text", onlyEquals, undefined, ["labels"]),
+  field("title", "Title", "Search in the issue title", "text", onlyEquals),
+  field("description", "Description", "Search in the description", "text", onlyEquals, undefined, ["desc"]),
+  field("notes", "Notes", "Search in issue notes", "text", onlyEquals),
+  field("created", "Created", "Creation date or relative time", "date", timeComparisons, undefined, ["created_at"]),
+  field("updated", "Updated", "Last update date or relative time", "date", timeComparisons, undefined, ["updated_at"]),
+  field("started", "Started", "First transition to in progress", "date", openTimeComparisons, undefined, ["started_at"]),
+  field("closed", "Closed", "Close date or relative time", "date", openTimeComparisons, undefined, ["closed_at"]),
   field("id", "ID", "Issue ID; equality supports a trailing wildcard", "identifier", equality),
   field("spec", "Spec", "Specification ID; equality supports a trailing wildcard", "identifier", equality, undefined, ["spec_id"]),
-  field("pinned", "Pinned", "Whether the issue is pinned", "boolean", ["=", "!="], ["true", "false", "yes", "no", "1", "0"]),
-  field("ephemeral", "Ephemeral", "Whether the issue is ephemeral", "boolean", ["=", "!="], ["true", "false", "yes", "no", "1", "0"]),
-  field("template", "Template", "Whether the issue is a template", "boolean", ["=", "!="], ["true", "false", "yes", "no", "1", "0"]),
+  field("pinned", "Pinned", "Whether the issue is pinned", "boolean", onlyEquals, ["true", "false", "yes", "no", "1", "0"]),
+  field("ephemeral", "Ephemeral", "Whether the issue is ephemeral", "boolean", onlyEquals, ["true", "false", "yes", "no", "1", "0"]),
+  field("template", "Template", "Whether the issue is a template", "boolean", onlyEquals, ["true", "false", "yes", "no", "1", "0"]),
   field("parent", "Parent", "Parent issue ID", "identifier", onlyEquals),
   field("mol_type", "Molecule type", "Molecule type", "enum", onlyEquals, ["swarm", "patrol", "work"]),
   field("has_metadata_key", "Has metadata key", "Test for a metadata key", "identifier", onlyEquals),
