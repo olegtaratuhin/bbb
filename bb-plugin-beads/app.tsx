@@ -2138,22 +2138,57 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-2">
         <div className="w-full">
           <div className="flex min-w-0 items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              aria-label="Refresh issues"
-              onClick={() => setRefresh((value) => value + 1)}
+            <div
+              className="flex shrink-0 overflow-hidden rounded-md border border-border"
+              role="group"
+              aria-label="Issue view"
             >
-              <Icon name="RotateCcw" className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <CreateIssueDialog
-              open={createOpen}
-              onOpenChange={handleCreateOpenChange}
-              initialType={createType}
-              onCreate={createIssue}
-            />
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "kanban" ? "secondary" : "ghost"}
+                className="rounded-none"
+                onClick={() => {
+                  setEpicScopeId(null);
+                  setGraphFocusId(null);
+                  setViewMode("kanban");
+                }}
+                aria-pressed={viewMode === "kanban"}
+                aria-label="Kanban board view"
+              >
+                Kanban
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                className="rounded-none border-l border-border"
+                onClick={() => {
+                  setEpicScopeId(null);
+                  setGraphFocusId(null);
+                  setViewMode("list");
+                }}
+                aria-pressed={viewMode === "list"}
+                aria-label="List view"
+              >
+                List
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "graph" ? "secondary" : "ghost"}
+                className="rounded-none border-l border-border"
+                onClick={() => {
+                  setEpicScopeId(null);
+                  setGraphFocusId(null);
+                  setViewMode("graph");
+                }}
+                aria-pressed={viewMode === "graph"}
+                aria-label="Dependency graph view"
+              >
+                Graph
+              </Button>
+            </div>
             <div className="flex min-w-0 flex-1 @md:max-w-[28rem]">
               <Input
                 aria-label="Search Beads issues"
@@ -2164,57 +2199,22 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               />
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <div
-                className="flex overflow-hidden rounded-md border border-border"
-                role="group"
-                aria-label="Issue view"
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                aria-label="Refresh issues"
+                onClick={() => setRefresh((value) => value + 1)}
               >
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={viewMode === "kanban" ? "secondary" : "ghost"}
-                  className="rounded-none"
-                  onClick={() => {
-                    setEpicScopeId(null);
-                    setGraphFocusId(null);
-                    setViewMode("kanban");
-                  }}
-                  aria-pressed={viewMode === "kanban"}
-                  aria-label="Kanban board view"
-                >
-                  Kanban
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={viewMode === "list" ? "secondary" : "ghost"}
-                  className="rounded-none border-l border-border"
-                  onClick={() => {
-                    setEpicScopeId(null);
-                    setGraphFocusId(null);
-                    setViewMode("list");
-                  }}
-                  aria-pressed={viewMode === "list"}
-                  aria-label="List view"
-                >
-                  List
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={viewMode === "graph" ? "secondary" : "ghost"}
-                  className="rounded-none border-l border-border"
-                  onClick={() => {
-                    setEpicScopeId(null);
-                    setGraphFocusId(null);
-                    setViewMode("graph");
-                  }}
-                  aria-pressed={viewMode === "graph"}
-                  aria-label="Dependency graph view"
-                >
-                  Graph
-                </Button>
-              </div>
+                <Icon name="RotateCcw" className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <CreateIssueDialog
+                open={createOpen}
+                onOpenChange={handleCreateOpenChange}
+                initialType={createType}
+                onCreate={createIssue}
+              />
               <Button
                 type="button"
                 variant="ghost"
