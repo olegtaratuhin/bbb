@@ -16,6 +16,14 @@ import {
   type ProjectSourceLike,
 } from "./workspace-resolution";
 
+const dependencySchema = z
+  .object({
+    issue_id: z.string(),
+    depends_on_id: z.string(),
+    type: z.string(),
+  })
+  .passthrough();
+
 const issueSchema = z
   .object({
     id: z.string(),
@@ -26,8 +34,8 @@ const issueSchema = z
     issue_type: z.string().optional(),
     assignee: z.string().optional(),
     labels: z.array(z.unknown()),
-    dependencies: z.array(z.unknown()),
-    dependents: z.array(z.unknown()),
+    dependencies: z.array(dependencySchema),
+    dependents: z.array(dependencySchema),
   })
   .passthrough();
 

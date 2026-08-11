@@ -23,8 +23,21 @@ export interface Issue {
   updated_at?: string;
   started_at?: string;
   labels: string[];
-  dependencies: unknown[];
-  dependents: unknown[];
+  dependencies: IssueDependency[];
+  dependents: IssueDependency[];
+  [key: string]: unknown;
+}
+
+export type DependencyType = string;
+
+export interface IssueDependency {
+  issue_id: string;
+  depends_on_id: string;
+  type: DependencyType;
+  title?: string;
+  status?: string;
+  priority?: number;
+  issue_type?: string;
   [key: string]: unknown;
 }
 
@@ -162,12 +175,72 @@ export function normalizeIssues(value: unknown): Issue[] {
     }
 
     const record = item as Record<string, unknown>;
+    const normalizeDependencies = (
+      value: unknown,
+      ownerId: string,
+      direction: "dependencies" | "dependents",
+    ): IssueDependency[] => {
+      if (!Array.isArray(value)) return [];
+      return value.flatMap((entry) => {
+        if (typeof entry === "string") return [];
+        if (typeof entry !== "object" || entry === null) return [];
+        const dependency = entry as Record<string, unknown>;
+        const explicitIssueId =
+          typeof dependency.issue_id === "string"
+            ? dependency.issue_id
+            : "";
+        const explicitDependsOnId =
+          typeof dependency.depends_on_id === "string"
+            ? dependency.depends_on_id
+            : typeof dependency.dependsOnId === "string"
+              ? dependency.dependsOnId
+              : "";
+        const legacyId = typeof dependency.id === "string" ? dependency.id : "";
+        const issueId =
+          explicitIssueId ||
+          (direction === "dependencies" ? ownerId : legacyId);
+        const dependsOnId =
+          explicitDependsOnId ||
+          (direction === "dependencies" ? legacyId : ownerId);
+        if (!issueId || !dependsOnId) return [];
+        const normalized: IssueDependency = {
+          issue_id: issueId,
+          depends_on_id: dependsOnId,
+          type:
+            typeof dependency.type === "string"
+              ? dependency.type
+              : typeof dependency.dependency_type === "string"
+                ? dependency.dependency_type
+                : "related",
+        };
+        for (const key of ["title", "status", "issue_type"] as const) {
+          if (typeof dependency[key] === "string") normalized[key] = dependency[key];
+        }
+        if (typeof dependency.priority === "number") {
+          normalized.priority = dependency.priority;
+        }
+        for (const key of Object.keys(dependency)) {
+          if (!(key in normalized) && dependency[key] !== undefined) {
+            normalized[key] = dependency[key];
+          }
+        }
+        return [normalized];
+      });
+    };
     const issue: Issue = {
       id: (record.id as string) ?? "",
       title: (record.title as string) ?? "",
       labels: Array.isArray(record.labels) ? record.labels : [],
-      dependencies: Array.isArray(record.dependencies) ? record.dependencies : [],
-      dependents: Array.isArray(record.dependents) ? record.dependents : [],
+      dependencies: normalizeDependencies(
+        record.dependencies,
+        (record.id as string) ?? "",
+        "dependencies",
+      ),
+      dependents: normalizeDependencies(
+        record.dependents,
+        (record.id as string) ?? "",
+        "dependents",
+      ),
     };
 
     // Copy optional string fields only when present (omit undefined for RPC compat)

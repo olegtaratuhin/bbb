@@ -120,6 +120,78 @@ describe("normalizeIssues", () => {
     expect(result[0].dependents).toEqual([]);
   });
 
+  it("normalizes dependency metadata and filters malformed records", () => {
+    const result = normalizeIssues({
+      id: "z",
+      title: "Z",
+      dependencies: [
+        {
+          issue_id: "z",
+          depends_on_id: "a",
+          type: "blocks",
+          title: "A",
+          status: "open",
+          priority: 1,
+        },
+        { issue_id: "z", type: "related" },
+        "a",
+      ],
+    });
+
+    expect(result[0].dependencies).toEqual([
+      {
+        issue_id: "z",
+        depends_on_id: "a",
+        type: "blocks",
+        title: "A",
+        status: "open",
+        priority: 1,
+      },
+    ]);
+  });
+
+  it("accepts legacy dependency id and dependency_type fields", () => {
+    const result = normalizeIssues({
+      id: "z",
+      title: "Z",
+      dependencies: [
+        {
+          id: "z",
+          dependsOnId: "a",
+          dependency_type: "parent-child",
+        },
+      ],
+    });
+
+    expect(result[0].dependencies[0]).toMatchObject({
+      issue_id: "z",
+      depends_on_id: "a",
+      type: "parent-child",
+    });
+  });
+
+  it("converts legacy nested issue dependencies using the owning issue", () => {
+    const result = normalizeIssues({
+      id: "child",
+      title: "Child",
+      dependencies: [{ id: "parent", title: "Parent", dependency_type: "parent-child" }],
+      dependents: [{ id: "dependent", title: "Dependent", dependency_type: "blocks" }],
+    });
+
+    expect(result[0].dependencies[0]).toMatchObject({
+      issue_id: "child",
+      depends_on_id: "parent",
+      type: "parent-child",
+      title: "Parent",
+    });
+    expect(result[0].dependents[0]).toMatchObject({
+      issue_id: "dependent",
+      depends_on_id: "child",
+      type: "blocks",
+      title: "Dependent",
+    });
+  });
+
   it("omits optional fields when absent (no undefined own properties)", () => {
     const input = { id: "bb-1", title: "Minimal" };
     const result = normalizeIssues(input);
@@ -158,7 +230,9 @@ describe("normalizeIssues", () => {
       updated_at: "2024-01-02",
       started_at: "2024-01-03",
       labels: ["urgent"],
-      dependencies: ["bb-1"],
+      dependencies: [
+        { issue_id: "bb-2", depends_on_id: "bb-1", type: "blocks" },
+      ],
       dependents: [],
     };
     const result = normalizeIssues(input);
@@ -174,7 +248,9 @@ describe("normalizeIssues", () => {
     expect(issue.updated_at).toBe("2024-01-02");
     expect(issue.started_at).toBe("2024-01-03");
     expect(issue.labels).toEqual(["urgent"]);
-    expect(issue.dependencies).toEqual(["bb-1"]);
+    expect(issue.dependencies).toEqual([
+      { issue_id: "bb-2", depends_on_id: "bb-1", type: "blocks" },
+    ]);
   });
 
   it("preserves present empty string fields", () => {

@@ -17,6 +17,7 @@ import {
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
+import { buildDependencyEdges, type DependencyEdge } from "./dependency-graph";
 import {
   buildEpicProgress,
   getDescendantWorkIssues,
@@ -81,7 +82,7 @@ type EpicSortMode =
   | "updated_desc"
   | "title_asc";
 
-type ViewMode = "kanban" | "list" | "epics";
+type ViewMode = "kanban" | "list" | "graph" | "epics";
 
 const STATUS_CONFIG: Record<
   IssueStatus,
@@ -690,6 +691,321 @@ function IssueListView({
   );
 }
 
+type GraphRelationFilter = "all" | "blocking" | "hierarchy" | "related";
+
+const GRAPH_RELATION_LABELS: Record<GraphRelationFilter, string> = {
+  all: "All relationships",
+  blocking: "Blocking",
+  hierarchy: "Hierarchy",
+  related: "Related",
+};
+
+const GRAPH_NODE_WIDTH = 196;
+const GRAPH_NODE_HEIGHT = 68;
+const GRAPH_COLUMN_GAP = 52;
+const GRAPH_ROW_GAP = 24;
+
+interface GraphNodePosition {
+  issue: Issue;
+  x: number;
+  y: number;
+  layer: number;
+}
+
+function graphEdgeLabel(edge: DependencyEdge) {
+  if (edge.relation === "blocking") return "Blocks";
+  if (edge.relation === "hierarchy") return "Parent / child";
+  if (edge.relation === "related") return "Related";
+  return edge.type;
+}
+
+function layoutDependencyGraph(
+  issues: readonly Issue[],
+  edges: readonly DependencyEdge[],
+) {
+  const nodeIds = new Set<string>();
+  for (const edge of edges) {
+    nodeIds.add(edge.fromId);
+    nodeIds.add(edge.toId);
+  }
+  const graphIssues = issues
+    .filter((issue) => nodeIds.has(issue.id))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const levels = new Map(graphIssues.map((issue) => [issue.id, 0]));
+
+  // Longest-path layering keeps blockers and parents to the left. The
+  // bounded passes also keep malformed/cyclic dependency data renderable.
+  for (let pass = 0; pass < graphIssues.length; pass++) {
+    let changed = false;
+    for (const edge of edges) {
+      const nextLevel = (levels.get(edge.fromId) ?? 0) + 1;
+      if (nextLevel > (levels.get(edge.toId) ?? 0)) {
+        levels.set(edge.toId, nextLevel);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  const byLayer = new Map<number, Issue[]>();
+  for (const issue of graphIssues) {
+    const layer = levels.get(issue.id) ?? 0;
+    const bucket = byLayer.get(layer) ?? [];
+    bucket.push(issue);
+    byLayer.set(layer, bucket);
+  }
+
+  const nodes: GraphNodePosition[] = [];
+  for (const [layer, layerIssues] of [...byLayer.entries()].sort(
+    ([a], [b]) => a - b,
+  )) {
+    layerIssues.sort((a, b) => a.id.localeCompare(b.id));
+    layerIssues.forEach((issue, index) => {
+      nodes.push({
+        issue,
+        layer,
+        x: 24 + layer * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP),
+        y: 24 + index * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP),
+      });
+    });
+  }
+
+  const maxLayer = Math.max(...nodes.map((node) => node.layer), 0);
+  const maxRows = Math.max(
+    ...[...byLayer.values()].map((layerIssues) => layerIssues.length),
+    1,
+  );
+  return {
+    nodes,
+    width: Math.max(680, 48 + (maxLayer + 1) * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP)),
+    height: Math.max(260, 48 + maxRows * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP)),
+  };
+}
+
+function DependencyGraphView({
+  issues,
+  focusedIssueId,
+  onOpenIssue,
+}: {
+  issues: Issue[];
+  focusedIssueId: string | null;
+  onOpenIssue: (issue: Issue) => void;
+}) {
+  const [relationFilter, setRelationFilter] =
+    useState<GraphRelationFilter>("all");
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(
+    focusedIssueId,
+  );
+  const allEdges = useMemo(() => buildDependencyEdges(issues), [issues]);
+  const edges = useMemo(
+    () =>
+      relationFilter === "all"
+        ? allEdges
+        : allEdges.filter((edge) => edge.relation === relationFilter),
+    [allEdges, relationFilter],
+  );
+  const layout = useMemo(
+    () => layoutDependencyGraph(issues, edges),
+    [edges, issues],
+  );
+  const positions = useMemo(
+    () => new Map(layout.nodes.map((node) => [node.issue.id, node])),
+    [layout.nodes],
+  );
+
+  useEffect(() => {
+    setSelectedIssueId(focusedIssueId);
+  }, [focusedIssueId]);
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">Dependency graph</h2>
+          <p className="text-xs text-muted-foreground">
+            {layout.nodes.length} issues · {edges.length} relationships
+          </p>
+        </div>
+        <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          Relationship
+          <select
+            aria-label="Filter graph relationships"
+            className="h-8 rounded-md border border-input bg-transparent px-2 text-xs text-foreground"
+            value={relationFilter}
+            onChange={(event) =>
+              setRelationFilter(event.target.value as GraphRelationFilter)
+            }
+          >
+            {(Object.keys(GRAPH_RELATION_LABELS) as GraphRelationFilter[]).map(
+              (option) => (
+                <option key={option} value={option}>
+                  {GRAPH_RELATION_LABELS[option]}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="h-px w-5 bg-destructive" aria-hidden="true" />
+          Blocks
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span
+            className="h-px w-5 border-t border-dashed border-muted-foreground"
+            aria-hidden="true"
+          />
+          Parent / child
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span
+            className="h-px w-5 border-t border-dotted border-muted-foreground"
+            aria-hidden="true"
+          />
+          Related
+        </span>
+      </div>
+
+      {layout.nodes.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+            No {relationFilter === "all" ? "dependencies" : GRAPH_RELATION_LABELS[relationFilter].toLowerCase()} in this view.
+          </CardContent>
+        </Card>
+      ) : (
+        <div
+          className="overflow-auto rounded-md border border-border bg-muted/20"
+          role="region"
+          aria-label="Issue dependency graph"
+        >
+          <div
+            className="relative"
+            style={{ width: layout.width, height: layout.height }}
+          >
+            <svg
+              className="pointer-events-none absolute inset-0"
+              width={layout.width}
+              height={layout.height}
+              aria-hidden="true"
+            >
+              <defs>
+                <marker
+                  id="beads-graph-arrow"
+                  markerWidth="7"
+                  markerHeight="7"
+                  refX="6"
+                  refY="3.5"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M0,0 L7,3.5 L0,7 z" fill="var(--destructive)" />
+                </marker>
+                <marker
+                  id="beads-graph-muted-arrow"
+                  markerWidth="7"
+                  markerHeight="7"
+                  refX="6"
+                  refY="3.5"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path
+                    d="M0,0 L7,3.5 L0,7 z"
+                    fill="var(--muted-foreground)"
+                  />
+                </marker>
+              </defs>
+              {edges.map((edge) => {
+                const from = positions.get(edge.fromId);
+                const to = positions.get(edge.toId);
+                if (!from || !to) return null;
+                const startX = from.x + GRAPH_NODE_WIDTH;
+                const startY = from.y + GRAPH_NODE_HEIGHT / 2;
+                const endX = to.x;
+                const endY = to.y + GRAPH_NODE_HEIGHT / 2;
+                const controlX = (startX + endX) / 2;
+                const selected =
+                  selectedIssueId === edge.fromId ||
+                  selectedIssueId === edge.toId;
+                const stroke =
+                  edge.relation === "blocking"
+                    ? "var(--destructive)"
+                    : "var(--muted-foreground)";
+                return (
+                  <path
+                    key={edge.id}
+                    d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={selected ? 2 : 1.25}
+                    strokeDasharray={
+                      edge.relation === "hierarchy"
+                        ? "5 4"
+                        : edge.relation === "related"
+                          ? "2 4"
+                          : undefined
+                    }
+                    opacity={selectedIssueId && !selected ? 0.2 : 0.75}
+                    markerEnd={
+                      edge.directed
+                        ? edge.relation === "blocking"
+                          ? "url(#beads-graph-arrow)"
+                          : "url(#beads-graph-muted-arrow)"
+                        : undefined
+                    }
+                  >
+                    <title>{graphEdgeLabel(edge)}</title>
+                  </path>
+                );
+              })}
+            </svg>
+            {layout.nodes.map(({ issue, x, y }) => {
+              const selected = selectedIssueId === issue.id;
+              return (
+                <button
+                  key={issue.id}
+                  type="button"
+                  className={`absolute flex flex-col justify-between rounded-md border bg-card p-2 text-left shadow-sm transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    selected ? "border-primary bg-secondary" : "border-border"
+                  }`}
+                  style={{
+                    left: x,
+                    top: y,
+                    width: GRAPH_NODE_WIDTH,
+                    height: GRAPH_NODE_HEIGHT,
+                  }}
+                  aria-label={`Open ${issue.id}: ${issue.title}`}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setSelectedIssueId(issue.id);
+                    onOpenIssue(issue);
+                  }}
+                >
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
+                    <span className="truncate text-[11px] text-muted-foreground">
+                      {issue.id}
+                    </span>
+                    <PriorityIcon
+                      priority={issue.priority}
+                      className="ml-auto h-3 w-3"
+                    />
+                  </span>
+                  <span className="line-clamp-2 text-xs font-medium">
+                    {issue.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EpicProgressCard({
   progress,
   onOpenIssue,
@@ -1279,7 +1595,11 @@ function CreateIssueDialog({
               </Button>
             </DialogClose>
             <Button type="submit" disabled={saving || !title.trim()}>
-              {saving ? "Creating…" : "Create issue"}
+              {saving
+                ? "Creating…"
+                : type === "epic"
+                  ? "Create epic"
+                  : "Create issue"}
             </Button>
           </DialogFooter>
         </form>
@@ -1293,10 +1613,14 @@ function IssueDetailsContent({
   onUpdate,
   childIssueCount,
   onViewChildren,
+  onOpenLinkedIssue,
+  onViewDependencies,
 }: {
   issue: Issue;
   childIssueCount: number;
   onViewChildren: (issue: Issue) => void;
+  onOpenLinkedIssue: (id: string) => void;
+  onViewDependencies: () => void;
   onUpdate: (input: {
     status?: IssueStatus;
     priority?: number;
@@ -1338,6 +1662,35 @@ function IssueDetailsContent({
     }
   }
 
+  const linkedIssues = [
+    ...issue.dependencies.map((dependency) => ({
+      id: dependency.depends_on_id,
+      title: dependency.title ?? dependency.depends_on_id,
+      relation: dependency.type,
+      direction:
+        ["blocks", "conditional-blocks", "waits-for"].includes(
+          dependency.type,
+        )
+          ? "Blocked by"
+          : dependency.type === "parent-child"
+            ? "Parent / child"
+          : "Related",
+    })),
+    ...issue.dependents.map((dependency) => ({
+      id: dependency.issue_id,
+      title: dependency.title ?? dependency.issue_id,
+      relation: dependency.type,
+      direction:
+        ["blocks", "conditional-blocks", "waits-for"].includes(
+          dependency.type,
+        )
+          ? "Blocks"
+          : dependency.type === "parent-child"
+            ? "Parent / child"
+          : "Related",
+    })),
+  ];
+
   return (
     <div className="h-full overflow-y-auto px-1">
         <div className="mb-4 flex items-center gap-2">
@@ -1377,6 +1730,50 @@ function IssueDetailsContent({
           </Button>
         </div>
       ) : null}
+      <div className="mb-4 rounded-md border border-border bg-card p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium">Dependencies</div>
+            <div className="text-xs text-muted-foreground">
+              {linkedIssues.length === 0
+                ? "No linked issues"
+                : `${linkedIssues.length} linked ${linkedIssues.length === 1 ? "issue" : "issues"}`}
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={onViewDependencies}
+          >
+            <Icon name="Workflow" className="h-3.5 w-3.5" aria-hidden="true" />
+            Open graph
+          </Button>
+        </div>
+        {linkedIssues.length > 0 ? (
+          <div className="grid gap-1">
+            {linkedIssues.map((linked, index) => (
+              <button
+                key={`${linked.direction}:${linked.id}:${index}`}
+                type="button"
+                className="flex min-w-0 items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-state-hover"
+                onClick={() => onOpenLinkedIssue(linked.id)}
+              >
+                <span className="shrink-0 text-muted-foreground">
+                  {linked.direction}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {linked.title}
+                </span>
+                <span className="shrink-0 text-muted-foreground">
+                  {linked.id}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
       <div className="mt-4 border-t border-border bg-card p-4">
         <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
           <label className="grid gap-2">
@@ -1463,6 +1860,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [refresh, setRefresh] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [epicScopeId, setEpicScopeId] = useState<string | null>(null);
+  const [graphFocusId, setGraphFocusId] = useState<string | null>(null);
   const [epicRailOpen, setEpicRailOpen] = useState(false);
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
@@ -1591,6 +1989,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     });
   }
 
+  function openLinkedIssue(id: string) {
+    navigate.toPluginPanel("board", {
+      subPath: `issue/${encodeURIComponent(id)}`,
+    });
+  }
+
   function closeDetail() {
     setDetail(null);
     navigate.toPluginPanel("board", { subPath: "", replace: true });
@@ -1606,6 +2010,17 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   function openEpicFromRail(id: string) {
     setEpicScopeId(id);
     setViewMode("epics");
+  }
+
+  function openDependencyGraph(issue: Issue) {
+    setQuery("");
+    setSelectedStatuses([]);
+    setSelectedPriorities([]);
+    setSortMode("manual");
+    setEpicScopeId(null);
+    setGraphFocusId(issue.id);
+    setViewMode("graph");
+    closeDetail();
   }
 
   function startNewEpic() {
@@ -1761,6 +2176,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   className="rounded-none"
                   onClick={() => {
                     setEpicScopeId(null);
+                    setGraphFocusId(null);
                     setViewMode("kanban");
                   }}
                   aria-pressed={viewMode === "kanban"}
@@ -1775,12 +2191,28 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   className="rounded-none border-l border-border"
                   onClick={() => {
                     setEpicScopeId(null);
+                    setGraphFocusId(null);
                     setViewMode("list");
                   }}
                   aria-pressed={viewMode === "list"}
                   aria-label="List view"
                 >
                   List
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "graph" ? "secondary" : "ghost"}
+                  className="rounded-none border-l border-border"
+                  onClick={() => {
+                    setEpicScopeId(null);
+                    setGraphFocusId(null);
+                    setViewMode("graph");
+                  }}
+                  aria-pressed={viewMode === "graph"}
+                  aria-label="Dependency graph view"
+                >
+                  Graph
                 </Button>
               </div>
               <Button
@@ -1930,6 +2362,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             />
           ) : viewMode === "list" ? (
             <IssueListView issues={visibleIssues} onOpenIssue={openIssue} />
+          ) : viewMode === "graph" ? (
+            <DependencyGraphView
+              issues={visibleIssues}
+              focusedIssueId={graphFocusId}
+              onOpenIssue={openIssue}
+            />
           ) : (
             <EpicProgressView
               issues={issues}
@@ -1970,6 +2408,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 onUpdate={updateIssue}
                 childIssueCount={detailChildIssueCount}
                 onViewChildren={openEpicIssues}
+                onOpenLinkedIssue={openLinkedIssue}
+                onViewDependencies={() => openDependencyGraph(detail)}
               />
             </div>
           ) : (
