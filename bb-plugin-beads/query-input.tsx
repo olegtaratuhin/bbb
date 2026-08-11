@@ -136,10 +136,12 @@ export function QueryInput({
           query={value}
           onQueryChange={onChange}
           onClosed={() => {
-            inputRef.current?.focus();
-            const nextCursor = inputRef.current?.value.length ?? value.length;
-            inputRef.current?.setSelectionRange(nextCursor, nextCursor);
-            setCursor(nextCursor);
+            requestAnimationFrame(() => {
+              inputRef.current?.focus();
+              const nextCursor = inputRef.current?.value.length ?? value.length;
+              inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+              setCursor(nextCursor);
+            });
           }}
         />
       </div>

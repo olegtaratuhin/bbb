@@ -55,6 +55,15 @@ describe("QueryInput", () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it("routes an applied mobile preset through the controlled query value", () => {
+    renderInput();
+    const input = screen.getByRole("textbox", { name: "Search Beads issues" });
+    fireEvent.click(screen.getByRole("button", { name: "Open query assistance" }));
+    fireEvent.click(screen.getByRole("button", { name: /Open Issues/ }));
+
+    expect((input as HTMLInputElement).value).toBe("status=open");
+  });
+
   it("renders syntax highlighting and an accessible diagnostic for invalid queries", () => {
     renderInput("priority=9");
     const input = screen.getByRole("textbox", { name: "Search Beads issues" });
