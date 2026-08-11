@@ -2135,7 +2135,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   return (
     <div className="@container flex h-full flex-col">
       {/* Header */}
-      <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-2">
+      <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-1.5">
         <div className="w-full">
           <div className="flex min-w-0 items-center gap-2">
             <div
@@ -2189,15 +2189,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 Graph
               </Button>
             </div>
-            <div className="flex min-w-0 flex-1 @md:max-w-[28rem]">
-              <Input
-                aria-label="Search Beads issues"
-                placeholder="Search issues or query"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="min-w-0"
-              />
-            </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <Button
                 type="button"
@@ -2228,8 +2219,17 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               </Button>
             </div>
           </div>
-          <div className="mt-1.5 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1.5">
+          <div className="mt-1 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+              <div className="flex min-w-[12rem] flex-1 @md:max-w-[28rem]">
+                <Input
+                  aria-label="Search Beads issues"
+                  placeholder="Search issues or query"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="h-8 min-w-0"
+                />
+              </div>
               <FilterChip
                 icon="Circle"
                 label="Status"
