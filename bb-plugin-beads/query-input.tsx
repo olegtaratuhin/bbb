@@ -134,8 +134,10 @@ export function QueryInput({
         <div
           role="listbox"
           aria-label="Beads query completions"
+          aria-orientation="vertical"
           id="beads-query-completions"
-          className="absolute left-0 right-0 top-9 z-30 grid max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md"
+          data-testid="beads-query-completion-surface"
+          className="absolute left-0 right-0 top-9 z-30 grid max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md [scrollbar-width:thin] max-md:pointer-coarse:fixed max-md:pointer-coarse:inset-x-3 max-md:pointer-coarse:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:pointer-coarse:top-auto max-md:pointer-coarse:max-h-[min(20rem,45dvh)] max-md:pointer-coarse:rounded-xl max-md:pointer-coarse:p-2 max-md:pointer-coarse:text-base max-md:pointer-coarse:shadow-lg"
         >
           {suggestions.map((item) => (
             <button
@@ -144,7 +146,8 @@ export function QueryInput({
               type="button"
               role="option"
               aria-selected={suggestions[activeSuggestion] === item}
-              className={`flex items-center justify-between gap-3 rounded px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground ${suggestions[activeSuggestion] === item ? "bg-accent text-accent-foreground" : ""}`}
+              className={`flex min-h-11 items-center justify-between gap-3 rounded px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground max-md:pointer-coarse:min-h-12 max-md:pointer-coarse:px-3.5 max-md:pointer-coarse:py-2.5 ${suggestions[activeSuggestion] === item ? "bg-accent text-accent-foreground" : ""}`}
+              onPointerDown={(event) => event.preventDefault()}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => acceptSuggestion(item)}
             >

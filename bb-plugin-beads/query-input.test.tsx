@@ -22,6 +22,9 @@ describe("QueryInput", () => {
     fireEvent.focus(input);
 
     const listbox = screen.getByRole("listbox", { name: "Beads query completions" });
+    expect(screen.getAllByTestId("beads-query-completion-surface")).toHaveLength(1);
+    expect(listbox.getAttribute("aria-orientation")).toBe("vertical");
+    expect(within(listbox).getByRole("option", { name: "open" }).classList.contains("min-h-11")).toBe(true);
     expect(within(listbox).getByRole("option", { name: "open" })).toBeTruthy();
     fireEvent.click(within(listbox).getByRole("option", { name: "open" }));
 
@@ -37,6 +40,19 @@ describe("QueryInput", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect((input as HTMLInputElement).value).toBe("priority");
+  });
+
+  it("dismisses the single completion surface with Escape", () => {
+    renderInput("status=op");
+    const input = screen.getByRole("textbox", { name: "Search Beads issues" });
+    (input as HTMLInputElement).focus();
+    fireEvent.focus(input);
+    expect(screen.getAllByTestId("beads-query-completion-surface")).toHaveLength(1);
+
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(screen.queryByTestId("beads-query-completion-surface")).toBeNull();
+    expect(document.activeElement).toBe(input);
   });
 
   it("renders syntax highlighting and an accessible diagnostic for invalid queries", () => {
