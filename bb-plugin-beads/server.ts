@@ -140,9 +140,15 @@ async function runProjectBd(
   args: readonly string[],
 ) {
   const target = await getWorkspaceTarget(bb, settings, projectId);
-  const hostExecute = bb.hosts?.execute;
-  const hasHostTransport = typeof hostExecute === "function";
-  if (!hasHostTransport && target.hostId !== undefined) {
+  // `execute` was added to the BB host API after the SDK declaration bundled
+  // with some installed servers. Keep the plugin loadable against those
+  // declarations while feature-detecting the runtime capability.
+  const hostExecute = (
+    bb.hosts as unknown as
+      | { execute?: NonNullable<Parameters<typeof runBdJson>[1]>["execute"] }
+      | undefined
+  )?.execute;
+  if (typeof hostExecute !== "function" && target.hostId !== undefined) {
     let isPrimaryHost = false;
     try {
       const system = await bb.sdk.system.config();
@@ -161,15 +167,10 @@ async function runProjectBd(
   }
   const result = await runBdJson(args, {
     cwd: target.path,
-    ...(hasHostTransport && target.hostId !== undefined
+    ...(typeof hostExecute === "function" && target.hostId !== undefined
       ? { hostId: target.hostId }
       : {}),
-    ...(hasHostTransport
-      ? {
-          execute: (request: Parameters<typeof hostExecute>[0]) =>
-            hostExecute(request),
-        }
-      : {}),
+    ...(typeof hostExecute === "function" ? { execute: hostExecute } : {}),
   });
   if (!result.ok) {
     throw new Error(errorMessage(result));
