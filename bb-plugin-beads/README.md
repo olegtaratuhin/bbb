@@ -26,9 +26,18 @@ is:
 3. the project in the current BB route/composer;
 4. BB's persisted root-compose project selection.
 
-The path override is useful for an arbitrary checkout and must be accessible
-from the BB server host. Project sources must have a local workspace and a
-working `bd` executable.
+For a project-backed selection, the plugin keeps the project source's
+`hostId` and runs `bd` on that host with the source path as its working
+directory. This is also the path used when BB is opened through **Connect**;
+the phone or browser never selects a filesystem host. The selected host must
+be enrolled and connected to BB, and must have a working `bd` executable.
+
+The path override is useful for an arbitrary checkout and intentionally runs
+on BB's primary host (the override does not accept a host selector). Leave it
+empty when the checkout belongs to an enrolled non-primary host. If a remote
+panel is empty, verify that the BB project has a `local_path` source, its
+source host is connected, and `bd` is available on that host; then reload the
+plugin and refresh the panel.
 
 ## Install locally
 
@@ -40,9 +49,10 @@ bb plugin install ./bb-plugin-beads --yes
 bb plugin reload beads
 ```
 
-The plugin uses `bd` from `PATH` by default. Set `BEADS_BIN` in the BB server
-environment when the executable has another name or location. Commands are
-spawned with an argument array and `shell: false`.
+The plugin uses `bd` from the selected host's `PATH` by default. Set
+`BEADS_BIN` in the BB server/host environment only when the executable has
+another name or location. Commands use a bounded, shell-free argument array;
+the plugin never reads `.beads/dolt` or `.beads/issues.jsonl` directly.
 
 ## Development checks
 
