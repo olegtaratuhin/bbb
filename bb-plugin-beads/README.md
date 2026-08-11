@@ -37,7 +37,11 @@ on BB's primary host (the override does not accept a host selector). Leave it
 empty when the checkout belongs to an enrolled non-primary host. If a remote
 panel is empty, verify that the BB project has a `local_path` source, its
 source host is connected, and `bd` is available on that host; then reload the
-plugin and refresh the panel.
+plugin and refresh the panel. BB versions without the host-command transport
+cannot safely execute a project sourced from another host; the plugin reports
+that the BB server must be updated or restarted instead of silently running
+`bd` on the wrong machine. Primary-host projects and path overrides continue
+to use the local fallback on those older servers.
 
 ## Install locally
 

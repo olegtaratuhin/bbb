@@ -21,6 +21,8 @@ function makeHost(options: {
   workspacePath?: string;
   projectSources?: Array<Record<string, unknown>>;
   execute?: ReturnType<typeof vi.fn>;
+  primaryHostId?: string | null;
+  legacyHostApi?: boolean;
 } = {}) {
   const registrations: { handlers: Record<string, (...args: any[]) => any> } = {
     handlers: {},
@@ -53,8 +55,13 @@ function makeHost(options: {
           sources: options.projectSources ?? [],
         })),
       },
+      system: {
+        config: vi.fn(async () => ({
+          primaryHostId: options.primaryHostId ?? "host-primary",
+        })),
+      },
     },
-    hosts: { execute },
+    hosts: options.legacyHostApi ? {} : { execute },
     rpc: {
       register: vi.fn((_contract: unknown, handlers: Record<string, any>) => {
         registrations.handlers = handlers;
@@ -136,5 +143,33 @@ describe("Beads server host routing", () => {
     await expect(
       disconnected.registrations.handlers.listIssues({ projectId: "proj-1" }),
     ).rejects.toThrow("Host is not connected");
+  });
+
+  it("does not run a remote project locally on an older BB server", async () => {
+    const legacy = makeHost({
+      legacyHostApi: true,
+      projectSources: [
+        { type: "local_path", path: "/remote/beads", hostId: "host-remote" },
+      ],
+    });
+    await plugin(legacy.bb);
+
+    await expect(
+      legacy.registrations.handlers.listIssues({ projectId: "proj-1" }),
+    ).rejects.toThrow("does not support host-routed Beads commands");
+  });
+
+  it("handles a BB server without the hosts namespace", async () => {
+    const legacy = makeHost({
+      projectSources: [
+        { type: "local_path", path: "/remote/beads", hostId: "host-remote" },
+      ],
+    });
+    (legacy.bb as unknown as { hosts?: unknown }).hosts = undefined;
+    await plugin(legacy.bb);
+
+    await expect(
+      legacy.registrations.handlers.listIssues({ projectId: "proj-1" }),
+    ).rejects.toThrow("does not support host-routed Beads commands");
   });
 });

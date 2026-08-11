@@ -140,10 +140,36 @@ async function runProjectBd(
   args: readonly string[],
 ) {
   const target = await getWorkspaceTarget(bb, settings, projectId);
+  const hostExecute = bb.hosts?.execute;
+  const hasHostTransport = typeof hostExecute === "function";
+  if (!hasHostTransport && target.hostId !== undefined) {
+    let isPrimaryHost = false;
+    try {
+      const system = await bb.sdk.system.config();
+      isPrimaryHost =
+        system.primaryHostId === null || system.primaryHostId === target.hostId;
+    } catch {
+      // An older BB may not expose the system metadata needed to prove that a
+      // project source is local. Fail closed rather than running on the wrong
+      // filesystem host.
+    }
+    if (!isPrimaryHost) {
+      throw new Error(
+        "This BB server does not support host-routed Beads commands. Update or restart BB before opening a project on another machine.",
+      );
+    }
+  }
   const result = await runBdJson(args, {
     cwd: target.path,
-    ...(target.hostId !== undefined ? { hostId: target.hostId } : {}),
-    execute: (request) => bb.hosts.execute(request),
+    ...(hasHostTransport && target.hostId !== undefined
+      ? { hostId: target.hostId }
+      : {}),
+    ...(hasHostTransport
+      ? {
+          execute: (request: Parameters<typeof hostExecute>[0]) =>
+            hostExecute(request),
+        }
+      : {}),
   });
   if (!result.ok) {
     throw new Error(errorMessage(result));
