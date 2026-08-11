@@ -1949,6 +1949,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [refresh, setRefresh] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [epicScopeId, setEpicScopeId] = useState<string | null>(null);
+  const [epicScopeEnabled, setEpicScopeEnabled] = useState(false);
   const [graphFocusId, setGraphFocusId] = useState<string | null>(null);
   const [graphOrientation, setGraphOrientation] =
     useState<GraphOrientation>("horizontal");
@@ -2036,12 +2037,20 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     void loadDetail();
   }, [rpcProjectId, selectedId, refresh, workspacePathOverride]);
 
-  const scopedIssues = useMemo(
+  const selectedEpic = useMemo(
     () =>
       epicScopeId === null
+        ? null
+        : issues.find((issue) => issue.id === epicScopeId) ?? null,
+    [epicScopeId, issues],
+  );
+  const epicScopeActive = epicScopeEnabled && selectedEpic !== null;
+  const scopedIssues = useMemo(
+    () =>
+      !epicScopeActive || epicScopeId === null
         ? issues
         : getDescendantWorkIssues(issues, epicScopeId),
-    [epicScopeId, issues],
+    [epicScopeActive, epicScopeId, issues],
   );
   const detailChildIssueCount = useMemo(
     () => (detail ? getDescendantWorkIssues(issues, detail.id).length : 0),
@@ -2093,6 +2102,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   function openEpicIssues(issue: Issue) {
     setEpicScopeId(issue.id);
+    setEpicScopeEnabled(true);
     setEpicRailOpen(true);
     setViewMode("epics");
     closeDetail();
@@ -2100,6 +2110,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   function openEpicFromRail(id: string) {
     setEpicScopeId(id);
+    setEpicScopeEnabled(true);
     setViewMode("epics");
   }
 
@@ -2108,7 +2119,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setSelectedStatuses([]);
     setSelectedPriorities([]);
     setSortMode("manual");
-    setEpicScopeId(null);
     setGraphFocusId(issue.id);
     setViewMode("graph");
     closeDetail();
@@ -2126,6 +2136,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   function returnToEpicProgress() {
     setEpicScopeId(null);
+    setEpicScopeEnabled(false);
     setEpicRailOpen(true);
     setViewMode("epics");
   }
@@ -2240,7 +2251,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 variant={viewMode === "kanban" ? "secondary" : "ghost"}
                 className="rounded-none"
                 onClick={() => {
-                  setEpicScopeId(null);
                   setGraphFocusId(null);
                   setViewMode("kanban");
                 }}
@@ -2255,7 +2265,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 variant={viewMode === "list" ? "secondary" : "ghost"}
                 className="rounded-none border-l border-border"
                 onClick={() => {
-                  setEpicScopeId(null);
                   setGraphFocusId(null);
                   setViewMode("list");
                 }}
@@ -2270,7 +2279,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 variant={viewMode === "graph" ? "secondary" : "ghost"}
                 className="rounded-none border-l border-border"
                 onClick={() => {
-                  setEpicScopeId(null);
                   setGraphFocusId(null);
                   setViewMode("graph");
                 }}
@@ -2312,6 +2320,42 @@ function BeadsPanel({ subPath }: { subPath: string }) {
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+              <div
+                className="flex shrink-0 items-center gap-1"
+                role="group"
+                aria-label="Issue scope"
+              >
+                <span className="text-xs text-muted-foreground">Scope</span>
+                <div className="flex overflow-hidden rounded-md border border-border">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={!epicScopeActive ? "secondary" : "ghost"}
+                    className="h-8 rounded-none px-2"
+                    aria-pressed={!epicScopeActive}
+                    aria-label="Show all issues"
+                    onClick={() => setEpicScopeEnabled(false)}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={epicScopeActive ? "secondary" : "ghost"}
+                    className="h-8 rounded-none border-l border-border px-2"
+                    aria-pressed={epicScopeActive}
+                    aria-label={
+                      selectedEpic
+                        ? `Show issues in ${selectedEpic.title}`
+                        : "Select an epic from the epic drawer first"
+                    }
+                    disabled={selectedEpic === null}
+                    onClick={() => setEpicScopeEnabled(true)}
+                  >
+                    Epic
+                  </Button>
+                </div>
+              </div>
               <div className="flex min-w-[12rem] flex-1 @md:max-w-[28rem]">
                 <Input
                   aria-label="Search Beads issues"
@@ -2423,28 +2467,28 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto p-4">
           <div className="w-full">
-          {viewMode === "epics" ? (
-            <EpicWorkspace
-              issues={issues}
-              visibleIssues={visibleIssues}
-              statusFilter={selectedStatuses}
-              selectedEpicId={epicScopeId}
-              loading={loading}
-              onBack={returnToEpicProgress}
-              onOpenIssue={openIssue}
-            />
-          ) : loading && visibleIssues.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                Loading issues…
-              </CardContent>
-            </Card>
-          ) : visibleIssues.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                No issues match this view.
-              </CardContent>
-            </Card>
+            {viewMode === "epics" ? (
+              <EpicWorkspace
+                issues={issues}
+                visibleIssues={visibleIssues}
+                statusFilter={selectedStatuses}
+                selectedEpicId={epicScopeActive ? epicScopeId : null}
+                loading={loading}
+                onBack={returnToEpicProgress}
+                onOpenIssue={openIssue}
+              />
+            ) : loading && visibleIssues.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  Loading issues…
+                </CardContent>
+              </Card>
+            ) : visibleIssues.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  No issues match this view.
+                </CardContent>
+              </Card>
           ) : viewMode === "kanban" ? (
             <KanbanBoard
               issues={visibleIssues}
