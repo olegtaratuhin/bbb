@@ -1,83 +1,44 @@
-# bb-plugin-beads
+# Beads for BB
 
-A BB plugin.
+This plugin adds a native BB project panel for repositories managed by
+[Beads](https://github.com/gastownhall/beads). It talks to the `bd` CLI with
+JSON output; it never reads the Beads database or `issues.jsonl` directly.
 
-## UI components
+## Current UI
 
-`components/ui/` is vendored source you own (the shadcn model): edit the
-files freely — they never update out from under you. Add more from the BB
-component registry (the full shadcn set, version-matched to your BB install
-via the pinned ref in `components.json`):
+The **Beads** panel is available from the BB navigation for the selected
+project. It provides:
 
-```
-npx shadcn add @bb/dialog @bb/select
-```
+- issue search and status filtering;
+- issue detail loading with status and priority controls;
+- editing title, description, and acceptance criteria;
+- creating a new issue with type, priority, and description;
+- explicit refresh after changes.
 
-Run `npm install` once before `bb plugin build` — the vendored components'
-npm deps bundle into your dist. React, and BB-shimmed packages like the
-radix portal primitives and `sonner` (`import { toast } from "sonner"`
-reaches BB's own toaster), are provided by the BB app at runtime and never
-bundled. Ship `dist/` (npm tarball or committed for git installs) so
-people installing your plugin never need npm.
+The panel is intentionally project-scoped. The selected BB project must have a
+local workspace and a working `bd` executable.
 
-## Manifest
+## Install locally
 
-`package.json` is the plugin manifest. Notable fields:
+From this repository:
 
-- `bb.server` — backend entry (required); optional `bb.app` for a frontend.
-- `bb.name` and `bb.description` — required human-facing identity.
-- `bb.branding` — required; declare `icon` as a BB icon name or a
-  plugin-relative compact SVG, or declare `logo.light` (with optional
-  `logo.dark`). Logo assets must be relative `.svg`, `.png`, or
-  `.webp` files.
-- `engines.bb` — supported bb app version range.
-- `engines.bbPluginSdk` — supported plugin SDK range (scaffold: `^0.4.1`).
-
-Run `bb plugin build` before publishing git/npm installs. It writes
-`dist/server.js` + `server.meta.json` (and, with `bb.app`, `app.js` /
-`app.css` / `app.meta.json`). Each `*.meta.json` stamps SDK major/version,
-`artifactFormatVersion`, `pluginId`, `pluginVersion`, and
-`builtWith` so managed installs can verify the artifacts.
-
-## Install
-
-From this directory:
-
-```
-bb plugin install .
-```
-
-After editing sources, reload:
-
-```
+```sh
+npm install
+bb plugin install ./bb-plugin-beads --yes
 bb plugin reload beads
 ```
 
-## Configure
+The plugin uses `bd` from `PATH` by default. Set `BEADS_BIN` in the BB server
+environment when the executable has another name or location. Commands are
+spawned with an argument array and `shell: false`.
 
-```
-bb plugin config beads
-bb plugin config beads set greeting hi
-```
+## Development checks
 
-## Types & API reference
-
-`types/bb-plugin-sdk.d.ts` (and `types/bb-plugin-sdk-app.d.ts` for the
-frontend) are the full, bundled BB plugin API — `tsconfig.json` maps
-`@bb/plugin-sdk` to them, so your editor and `tsc` see real types with no extra
-install. They are readable declarations: open them for an exact signature.
-
-The SDK surface grows with every BB release, and these are a copy. Refresh
-them from the BB you are running:
-
-```
-bb plugin types          # rewrite types/ from this BB
-bb plugin types --check  # CI: fail when they are out of date
+```sh
+npm test
+npm run typecheck
+bb plugin build
 ```
 
-`bb plugin build` and `bb plugin dev` refresh them for you. Ask BB to write
-plugins for you: the `bb-plugin-authoring` skill documents the whole surface
-with examples.
-
-Confused by the API, or need something the types don't explain? Clone the BB
-repo and read the source: <https://github.com/get-bb/bb>.
+The build emits the server and frontend bundles under `dist/`; those generated
+artifacts are ignored in source checkouts because BB rebuilds path installs.

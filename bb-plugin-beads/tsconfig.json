@@ -29,6 +29,7 @@
   "include": [
     "server.ts",
     "app.tsx",
+    "bd-client.ts",
     "types",
     "components",
     "lib",

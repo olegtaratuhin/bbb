@@ -1,0 +1,285 @@
+// bd-client.ts — bounded Beads CLI adapter for bb-plugin-beads.
+//
+// Pure, testable TypeScript module.  No side effects on import.
+// Invokes the `bd` binary via `node:child_process.spawn` (shell: false)
+// and returns structured results.
+
+import { spawn } from "node:child_process";
+import type { SpawnOptions } from "node:child_process";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface Issue {
+  id: string;
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: number;
+  issue_type?: string;
+  assignee?: string;
+  owner?: string;
+  created_at?: string;
+  created_by?: string;
+  updated_at?: string;
+  started_at?: string;
+  labels: string[];
+  dependencies: unknown[];
+  dependents: unknown[];
+  [key: string]: unknown;
+}
+
+export type BdOk<T = unknown> = { ok: true; value: T };
+export type BdErr =
+  | { ok: false; kind: "spawn"; code: string; message: string }
+  | { ok: false; kind: "exit"; code: number; stdout: string; stderr: string }
+  | { ok: false; kind: "parse"; raw: string; error: string };
+
+export type BdResult<T = unknown> = BdOk<T> | BdErr;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Resolve the bd binary path (BEADS_BIN env var or default "bd"). */
+function resolveBdBin(): string {
+  return process.env.BEADS_BIN ?? "bd";
+}
+
+/** Get the current working directory for bd commands. */
+function getCwd(options?: { cwd?: string | undefined }): string {
+  return options?.cwd ?? process.cwd();
+}
+
+// ── buildBdArgs ──────────────────────────────────────────────────────────────
+
+/**
+ * Prepends `--json` and `--sandbox` flags unless already present.
+ */
+export function buildBdArgs(commandArgs: readonly string[]): string[] {
+  const lower = commandArgs.map((a) => a.toLowerCase());
+  const result: string[] = [];
+  if (!lower.some((a) => a === "--json" || a === "-j")) {
+    result.push("--json");
+  }
+  if (!lower.some((a) => a === "--sandbox")) {
+    result.push("--sandbox");
+  }
+  result.push(...commandArgs);
+  return result;
+}
+
+// ── runBdJson ────────────────────────────────────────────────────────────────
+
+export interface RunBdOptions {
+  cwd?: string;
+}
+
+/**
+ * Invoke the bd CLI and return parsed JSON on success,
+ * or a structured error on failure.
+ */
+export function runBdJson(
+  commandArgs: readonly string[],
+  options?: RunBdOptions,
+): Promise<BdResult> {
+  return new Promise((resolve) => {
+    const args = buildBdArgs(commandArgs);
+    const cwd = getCwd(options);
+    const bin = resolveBdBin();
+
+    const spawnOptions: SpawnOptions = {
+      cwd,
+      shell: false,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    };
+
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(bin, args, spawnOptions);
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? "UNKNOWN";
+      const message = err instanceof Error ? err.message : String(err);
+      return resolve({ ok: false, kind: "spawn", code, message });
+    }
+
+    const stdoutParts: Buffer[] = [];
+    const stderrParts: Buffer[] = [];
+
+    child.stdout!.on("data", (chunk: Buffer) => stdoutParts.push(chunk));
+    child.stderr!.on("data", (chunk: Buffer) => stderrParts.push(chunk));
+
+    child.on("error", (err: Error) => {
+      const code = (err as { code?: string }).code ?? "UNKNOWN";
+      resolve({ ok: false, kind: "spawn", code, message: err.message });
+    });
+
+    child.on("close", (code) => {
+      const stdout = Buffer.concat(stdoutParts).toString("utf8");
+      const stderr = Buffer.concat(stderrParts).toString("utf8");
+
+      if (code !== 0) {
+        resolve({
+          ok: false,
+          kind: "exit",
+          code: code ?? -1,
+          stdout,
+          stderr,
+        });
+        return;
+      }
+
+      const raw = (stdout.trim() || stderr.trim()) ?? "";
+      if (!raw) {
+        resolve({ ok: false, kind: "parse", raw: "", error: "Empty output" });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(raw);
+        resolve({ ok: true, value: parsed });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        resolve({ ok: false, kind: "parse", raw, error: message });
+      }
+    });
+  });
+}
+
+// ── normalizeIssues ──────────────────────────────────────────────────────────
+
+/**
+ * Accept a JSON payload (single object or array) and return a normalized
+ * `Issue[]` with guaranteed array fields for labels/dependencies/dependents.
+ */
+export function normalizeIssues(value: unknown): Issue[] {
+  if (value === null || value === undefined) {
+    return [];
+  }
+
+  const items: unknown[] = Array.isArray(value) ? value : [value];
+  return items.flatMap((item) => {
+    if (typeof item !== "object" || item === null) {
+      return [];
+    }
+
+    const record = item as Record<string, unknown>;
+    const issue: Issue = {
+      id: (record.id as string) ?? "",
+      title: (record.title as string) ?? "",
+      description: record.description ? (record.description as string) : undefined,
+      status: record.status ? (record.status as string) : undefined,
+      priority: typeof record.priority === "number" ? record.priority : undefined,
+      issue_type: record.issue_type ? (record.issue_type as string) : undefined,
+      assignee: record.assignee ? (record.assignee as string) : undefined,
+      owner: record.owner ? (record.owner as string) : undefined,
+      created_at: record.created_at ? (record.created_at as string) : undefined,
+      created_by: record.created_by ? (record.created_by as string) : undefined,
+      updated_at: record.updated_at ? (record.updated_at as string) : undefined,
+      started_at: record.started_at ? (record.started_at as string) : undefined,
+      labels: Array.isArray(record.labels) ? record.labels : [],
+      dependencies: Array.isArray(record.dependencies) ? record.dependencies : [],
+      dependents: Array.isArray(record.dependents) ? record.dependents : [],
+    };
+
+    // Preserve any additional fields
+    for (const key of Object.keys(record)) {
+      if (!(key in issue)) {
+        issue[key] = record[key];
+      }
+    }
+
+    return [issue];
+  });
+}
+
+// ── Command Argument Builders ─────────────────────────────────────────────────
+
+/** Validate an issue ID — must be a non-empty string. */
+function validateId(id: string): string {
+  if (!id || typeof id !== "string" || !id.trim()) {
+    throw new Error("Issue ID must be a non-empty string");
+  }
+  return id.trim();
+}
+
+/** Validate a text value (title, description, etc.) — must be a non-empty string. */
+function validateText(value: string, name: string): string {
+  if (!value || typeof value !== "string" || !value.trim()) {
+    throw new Error(`${name} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+/**
+ * Build arguments for `bd list --all --flat`.
+ */
+export function listIssuesArgs(filters?: {
+  status?: string;
+  priority?: string;
+}): string[] {
+  const args: string[] = ["list", "--all", "--flat"];
+  if (filters?.status) {
+    args.push("--status", filters.status);
+  }
+  if (filters?.priority) {
+    args.push("--priority", filters.priority);
+  }
+  return args;
+}
+
+/**
+ * Build arguments for `bd show <id>`.
+ */
+export function showIssueArgs(id: string): string[] {
+  return ["show", validateId(id)];
+}
+
+/**
+ * Build arguments for `bd create <title>`.
+ */
+export function createIssueArgs(params: {
+  title: string;
+  type?: string;
+  priority?: number;
+  description?: string;
+}): string[] {
+  const args: string[] = ["create", validateText(params.title, "Title")];
+  if (params.type) {
+    args.push("--type", params.type);
+  }
+  if (typeof params.priority === "number") {
+    args.push("--priority", String(params.priority));
+  }
+  if (params.description !== undefined) {
+    args.push("--description", validateText(params.description, "Description"));
+  }
+  return args;
+}
+
+/**
+ * Build arguments for `bd update <id>`.
+ */
+export function updateIssueArgs(id: string, params: {
+  status?: string;
+  priority?: number;
+  title?: string;
+  description?: string;
+  acceptance?: string;
+}): string[] {
+  const args: string[] = ["update", validateId(id)];
+  if (params.status) {
+    args.push("--status", params.status);
+  }
+  if (typeof params.priority === "number") {
+    args.push("--priority", String(params.priority));
+  }
+  if (params.title !== undefined) {
+    args.push("--title", validateText(params.title, "Title"));
+  }
+  if (params.description !== undefined) {
+    args.push("--description", validateText(params.description, "Description"));
+  }
+  if (params.acceptance !== undefined) {
+    args.push("--acceptance", validateText(params.acceptance, "Acceptance"));
+  }
+  return args;
+}

@@ -1,61 +1,163 @@
-// bb-plugin-beads — a BB plugin backend entry.
-//
-// The default export is a factory that receives the plugin API. BB supplies
-// the tiny defineRpcContract runtime helper; the API type remains type-only.
 import { defineRpcContract, type BbPluginApi } from "@bb/plugin-sdk";
 import { z } from "zod";
+import {
+  createIssueArgs,
+  listIssuesArgs,
+  normalizeIssues,
+  runBdJson,
+  showIssueArgs,
+  updateIssueArgs,
+  type Issue,
+} from "./bd-client";
+
+const issueSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    description: z.string().optional(),
+    status: z.string().optional(),
+    priority: z.number().optional(),
+    issue_type: z.string().optional(),
+    assignee: z.string().optional(),
+    labels: z.array(z.unknown()),
+    dependencies: z.array(z.unknown()),
+    dependents: z.array(z.unknown()),
+  })
+  .passthrough();
+
+const projectInput = z.object({ projectId: z.string().min(1) });
+const issueIdInput = projectInput.extend({ id: z.string().min(1) });
+
+const issueOutput = z.object({ issue: issueSchema });
 
 export const rpcContract = defineRpcContract({
-  greeting: {
-    input: z.null(),
-    output: z.object({ greeting: z.string(), loadCount: z.number().int() }),
+  listIssues: {
+    input: projectInput.extend({
+      status: z.string().optional(),
+      priority: z.string().optional(),
+    }),
+    output: z.object({ issues: z.array(issueSchema) }),
+  },
+  showIssue: {
+    input: issueIdInput,
+    output: issueOutput,
+  },
+  createIssue: {
+    input: projectInput.extend({
+      title: z.string().min(1),
+      type: z.string().optional(),
+      priority: z.number().int().min(0).max(4).optional(),
+      description: z.string().optional(),
+    }),
+    output: issueOutput,
+  },
+  updateIssue: {
+    input: issueIdInput.extend({
+      status: z
+        .enum(["open", "in_progress", "blocked", "deferred", "closed"])
+        .optional(),
+      priority: z.number().int().min(0).max(4).optional(),
+      title: z.string().min(1).optional(),
+      description: z.string().optional(),
+      acceptance: z.string().optional(),
+    }),
+    output: issueOutput,
   },
 });
+
+type ProjectSource = { isDefault: boolean; path: string; type: string };
+
+function errorMessage(result: { kind: string; message?: string; stderr?: string; error?: string }) {
+  if (result.kind === "spawn") {
+    return result.message ?? "Unable to start bd";
+  }
+  if (result.kind === "parse") {
+    return result.error ?? "bd returned invalid JSON";
+  }
+  return result.stderr?.trim() || "bd command failed";
+}
+
+function asIssue(value: unknown): Issue {
+  const issue = normalizeIssues(value)[0];
+  if (!issue || !issue.id) {
+    throw new Error("bd returned no issue");
+  }
+  return issue;
+}
+
+async function getWorkspacePath(bb: BbPluginApi, projectId: string) {
+  const project = await bb.sdk.projects.get({ projectId });
+  const source = project.sources.find(
+    (candidate: ProjectSource) => candidate.isDefault,
+  ) ?? project.sources[0];
+  if (!source || source.type !== "local_path" || !source.path) {
+    throw new Error("The selected project has no local workspace for bd");
+  }
+  return source.path;
+}
+
+async function runProjectBd(
+  bb: BbPluginApi,
+  projectId: string,
+  args: readonly string[],
+) {
+  const cwd = await getWorkspacePath(bb, projectId);
+  const result = await runBdJson(args, { cwd });
+  if (!result.ok) {
+    throw new Error(errorMessage(result));
+  }
+  return result.value;
+}
 
 export default async function plugin(bb: BbPluginApi) {
   bb.log.info("loaded");
 
-  // Declarative settings — rendered in BB's settings UI and editable with
-  // `bb plugin config beads`. Add `secret: true` for values like API keys.
-  const settings = bb.settings.define({
-    greeting: { type: "string", label: "Greeting", default: "hello" },
-  });
-  const { greeting } = await settings.get();
-
-  // Namespaced key-value storage in bb.db (JSON values, up to 256KB each).
-  // For bigger or relational data use bb.storage.database().
-  const loadCount = ((await bb.storage.kv.get<number>("load-count")) ?? 0) + 1;
-  await bb.storage.kv.set("load-count", loadCount);
-  bb.log.info(`${greeting} — load #${loadCount}`);
-
-  // Both schemas run at the wire boundary. Handler input/output are inferred
-  // from the shared contract; app.tsx imports only its type.
   bb.rpc.register(rpcContract, {
-    greeting: () => ({ greeting, loadCount }),
+    async listIssues({ projectId, status, priority }) {
+      const value = await runProjectBd(
+        bb,
+        projectId,
+        listIssuesArgs({ status, priority }),
+      );
+      return { issues: normalizeIssues(value) };
+    },
+    async showIssue({ projectId, id }) {
+      const value = await runProjectBd(bb, projectId, showIssueArgs(id));
+      return { issue: asIssue(value) };
+    },
+    async createIssue({ projectId, title, type, priority, description }) {
+      const value = await runProjectBd(
+        bb,
+        projectId,
+        createIssueArgs({ title, type, priority, description }),
+      );
+      return { issue: asIssue(value) };
+    },
+    async updateIssue({
+      projectId,
+      id,
+      status,
+      priority,
+      title,
+      description,
+      acceptance,
+    }) {
+      const value = await runProjectBd(
+        bb,
+        projectId,
+        updateIssueArgs(id, {
+          status,
+          priority,
+          title,
+          description,
+          acceptance,
+        }),
+      );
+      return { issue: asIssue(value) };
+    },
   });
 
-  // Cleanup on reload/disable/shutdown; hooks run LIFO. The sanctioned place
-  // to clear timers and close connections.
   bb.onDispose(() => {
     bb.log.info("disposed");
   });
-
-  // Long-lived background work: starts after load, gets an AbortSignal on
-  // reload/disable/shutdown, and restarts with backoff if it crashes. Sleeps
-  // must wake on abort — a plain setTimeout sleeps through the stop window
-  // and the plugin reports "degraded (service did not stop)" on reload.
-  // bb.background.service("worker", {
-  //   async start(signal) {
-  //     while (!signal.aborted) {
-  //       await new Promise((resolve) => {
-  //         const timer = setTimeout(resolve, 60_000);
-  //         signal.addEventListener(
-  //           "abort",
-  //           () => { clearTimeout(timer); resolve(undefined); },
-  //           { once: true },
-  //         );
-  //       });
-  //     }
-  //   },
-  // });
 }
