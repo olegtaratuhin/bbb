@@ -2227,7 +2227,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                   placeholder="Search issues or query"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-8 min-w-0"
+                  className="h-8 min-w-0 focus-visible:border-ring focus-visible:ring-0"
                 />
               </div>
               <FilterChip
