@@ -3,6 +3,7 @@ import {
   buildBdArgs,
   normalizeIssues,
   listIssuesArgs,
+  queryIssuesArgs,
   showIssueArgs,
   createIssueArgs,
   updateIssueArgs,
@@ -221,6 +222,28 @@ describe("listIssuesArgs", () => {
       "--priority",
       "2",
     ]);
+  });
+});
+
+describe("queryIssuesArgs", () => {
+  it("builds a query expression with closed issues included", () => {
+    expect(queryIssuesArgs("status=open AND priority<=1")).toEqual([
+      "query",
+      "(status=open AND priority<=1)",
+      "--all",
+    ]);
+  });
+
+  it("combines the query with the selected status", () => {
+    expect(queryIssuesArgs("type=bug", { status: "blocked" })).toEqual([
+      "query",
+      "(type=bug) AND status=blocked",
+      "--all",
+    ]);
+  });
+
+  it("rejects an empty expression", () => {
+    expect(() => queryIssuesArgs("  ")).toThrow("Query must be a non-empty string");
   });
 });
 

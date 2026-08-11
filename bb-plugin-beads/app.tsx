@@ -102,6 +102,21 @@ function issueMatches(issue: Issue, query: string) {
     .includes(normalizedQuery);
 }
 
+const QUERY_FIELD_PATTERN =
+  /\b(?:status|priority|type|assignee|owner|label|title|description|notes|created|updated|started|closed|id|spec|pinned|ephemeral|template|parent|mol_type)\s*(?:!=|>=|<=|=|>|<)\s*[^\s()]+/i;
+
+function isBeadsQuery(value: string) {
+  const query = value.trim();
+  if (
+    !query ||
+    /(?:AND|OR|NOT)\s*$/i.test(query) ||
+    /(?:!=|>=|<=|=|>|<)\s*$/i.test(query)
+  ) {
+    return false;
+  }
+  return QUERY_FIELD_PATTERN.test(query);
+}
+
 function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
   return (
     <button
@@ -604,6 +619,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     : null;
 
   const detailOpen = selectedId !== null;
+  const beadsQuery = isBeadsQuery(query) ? query.trim() : "";
 
   useEffect(() => {
     const refreshRootProject = () => {
@@ -628,6 +644,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       const result = await rpc.call("listIssues", {
         ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
         ...(status === "all" ? {} : { status }),
+        ...(beadsQuery ? { query: beadsQuery } : {}),
       });
       setIssues(result.issues as Issue[]);
     } catch (cause) {
@@ -655,15 +672,15 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   useEffect(() => {
     void loadIssues();
-  }, [rpcProjectId, status, refresh, workspacePathOverride]);
+  }, [rpcProjectId, status, refresh, workspacePathOverride, beadsQuery]);
 
   useEffect(() => {
     void loadDetail();
   }, [rpcProjectId, selectedId, refresh, workspacePathOverride]);
 
   const visibleIssues = useMemo(
-    () => issues.filter((issue) => issueMatches(issue, query)),
-    [issues, query],
+    () => (beadsQuery ? issues : issues.filter((issue) => issueMatches(issue, query))),
+    [beadsQuery, issues, query],
   );
 
   function openIssue(issue: Issue) {
@@ -774,7 +791,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             <div className="flex min-w-0 flex-[1_1_22rem] gap-2 sm:grid sm:max-w-[28rem] sm:grid-cols-[minmax(0,1fr)_10rem]">
               <Input
                 aria-label="Search Beads issues"
-                placeholder="Search issues"
+                placeholder="Search issues or query"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />

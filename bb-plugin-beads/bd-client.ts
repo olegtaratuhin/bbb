@@ -236,6 +236,24 @@ export function listIssuesArgs(filters?: {
 }
 
 /**
+ * Build arguments for `bd query <expression>`, preserving the list view's
+ * status/priority filters when they are selected.
+ */
+export function queryIssuesArgs(
+  expression: string,
+  filters?: { status?: string; priority?: string },
+): string[] {
+  const clauses = [`(${validateText(expression, "Query")})`];
+  if (filters?.status && filters.status !== "all") {
+    clauses.push(`status=${filters.status}`);
+  }
+  if (filters?.priority) {
+    clauses.push(`priority=${filters.priority}`);
+  }
+  return ["query", clauses.join(" AND "), "--all"];
+}
+
+/**
  * Build arguments for `bd show <id>`.
  */
 export function showIssueArgs(id: string): string[] {

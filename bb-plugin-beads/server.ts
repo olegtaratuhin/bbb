@@ -4,6 +4,7 @@ import {
   createIssueArgs,
   listIssuesArgs,
   normalizeIssues,
+  queryIssuesArgs,
   runBdJson,
   showIssueArgs,
   updateIssueArgs,
@@ -40,6 +41,7 @@ export const rpcContract = defineRpcContract({
     input: projectInput.extend({
       status: z.string().optional(),
       priority: z.string().optional(),
+      query: z.string().min(1).max(2000).optional(),
     }),
     output: z.object({ issues: z.array(issueSchema) }),
   },
@@ -154,12 +156,14 @@ export default async function plugin(bb: BbPluginApi) {
   });
 
   bb.rpc.register(rpcContract, {
-    async listIssues({ projectId, status, priority }) {
+    async listIssues({ projectId, status, priority, query }) {
       const value = await runProjectBd(
         bb,
         settings,
         projectId,
-        listIssuesArgs({ status, priority }),
+        query
+          ? queryIssuesArgs(query, { status, priority })
+          : listIssuesArgs({ status, priority }),
       );
       return { issues: normalizeIssues(value) };
     },
