@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   definePluginApp,
   Markdown,
@@ -16,7 +23,7 @@ import {
   type EpicProgress,
 } from "./epic-progress";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import {
   Card,
   CardContent,
@@ -59,6 +66,13 @@ const ISSUE_TYPES = [
 type IssueStatus = (typeof STATUSES)[number];
 const OTHER_STATUS = "__other" as const;
 type BoardStatus = IssueStatus | typeof OTHER_STATUS;
+type SortMode =
+  | "manual"
+  | "priority_desc"
+  | "priority_asc"
+  | "updated_desc"
+  | "created_desc"
+  | "title_asc";
 
 type ViewMode = "kanban" | "list" | "epics";
 
@@ -106,10 +120,25 @@ const OTHER_STATUS_CONFIG = {
   header: "border-t-violet-500",
 };
 
-const ISSUE_COUNT_BADGE_CLASS =
-  "inline-flex h-8 items-center rounded-md bg-muted px-2 text-xs text-muted-foreground";
 const COLUMN_COUNT_BADGE_CLASS =
   "inline-flex h-4 min-w-4 items-center justify-center rounded bg-muted px-1.5 text-[11px] leading-4 text-muted-foreground";
+
+const PRIORITIES = [0, 1, 2, 3, 4] as const;
+const PRIORITY_LABELS: Record<number, string> = {
+  0: "P0 · Critical",
+  1: "P1 · High",
+  2: "P2 · Medium",
+  3: "P3 · Low",
+  4: "P4 · Backlog",
+};
+const SORT_LABELS: Record<SortMode, string> = {
+  manual: "Manual",
+  priority_desc: "Priority (high → low)",
+  priority_asc: "Priority (low → high)",
+  updated_desc: "Updated (newest)",
+  created_desc: "Created (newest)",
+  title_asc: "Title (A–Z)",
+};
 
 function statusLabel(status: string | undefined) {
   const config = STATUS_CONFIG[status as IssueStatus];
@@ -126,10 +155,6 @@ function statusBadgeClass(status: string | undefined) {
     STATUS_CONFIG[status as IssueStatus]?.badge ??
     OTHER_STATUS_CONFIG.badge
   );
-}
-
-function statusDotClass(status: string | undefined) {
-  return STATUS_CONFIG[status as IssueStatus]?.dot ?? OTHER_STATUS_CONFIG.dot;
 }
 
 function issueMatches(issue: Issue, query: string) {
@@ -157,6 +182,251 @@ function isBeadsQuery(value: string) {
   return QUERY_FIELD_PATTERN.test(query);
 }
 
+function StatusIcon({
+  status,
+  className = "h-3.5 w-3.5",
+}: {
+  status: string | undefined;
+  className?: string;
+}) {
+  const color =
+    status === "blocked"
+      ? "text-red-500"
+      : status === "in_progress"
+        ? "text-amber-500"
+        : status === "closed"
+          ? "text-emerald-500"
+          : status === "open"
+            ? "text-sky-500"
+            : "text-muted-foreground";
+  const ring = (dashed = false) => (
+    <circle
+      cx="7"
+      cy="7"
+      r="5.4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      {...(dashed ? { strokeDasharray: "1.8 2" } : {})}
+    />
+  );
+
+  return (
+    <svg viewBox="0 0 14 14" aria-hidden className={`${color} ${className}`}>
+      {status === "closed" ? (
+        <>
+          <circle cx="7" cy="7" r="6" fill="currentColor" />
+          <path
+            d="M4.4 7.2 l1.8 1.8 3.4-3.8"
+            fill="none"
+            stroke="var(--background)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </>
+      ) : status === "blocked" ? (
+        <>
+          {ring()}
+          <path
+            d="M5 5 l4 4 M9 5 l-4 4"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </>
+      ) : status === "in_progress" ? (
+        <>
+          {ring()}
+          <path d="M7 7 L7 2.4 A4.6 4.6 0 0 1 11.2 9.5 Z" fill="currentColor" />
+        </>
+      ) : (
+        ring(status !== "open")
+      )}
+    </svg>
+  );
+}
+
+function PriorityIcon({
+  priority,
+  className = "h-3.5 w-3.5",
+}: {
+  priority: number | undefined;
+  className?: string;
+}) {
+  const normalized = priority === undefined ? 2 : Math.max(0, Math.min(4, priority));
+  const activeBars = Math.max(0, Math.min(3, 4 - normalized));
+  const bars = [
+    { x: 1.5, y: 8, height: 5 },
+    { x: 5.5, y: 5, height: 8 },
+    { x: 9.5, y: 2, height: 11 },
+  ];
+  return (
+    <svg viewBox="0 0 14 14" aria-hidden className={`text-muted-foreground ${className}`}>
+      {bars.map((bar, index) => (
+        <rect
+          key={bar.x}
+          x={bar.x}
+          y={bar.y}
+          width="3"
+          height={bar.height}
+          rx="1"
+          className={index < activeBars ? "fill-current" : "fill-muted"}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function FilterChip({
+  icon,
+  label,
+  selectedLabels,
+  align = "start",
+  children,
+}: {
+  icon: IconName;
+  label: string;
+  selectedLabels: readonly string[];
+  align?: "start" | "end";
+  children: ReactNode;
+}) {
+  const active = selectedLabels.length > 0;
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [menuStyle, setMenuStyle] = useState<
+    { top: number; left?: number; right?: number } | undefined
+  >();
+
+  useEffect(() => {
+    if (!open) return;
+
+    const positionMenu = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuStyle({
+        top: rect.bottom + 6,
+        ...(align === "end"
+          ? { right: window.innerWidth - rect.right }
+          : { left: rect.left }),
+      });
+    };
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [align, open]);
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-md border px-2.5 text-xs [&::-webkit-details-marker]:hidden max-md:pointer-coarse:h-8 ${
+          active
+            ? "border-border bg-secondary text-foreground"
+            : "border-dashed border-border text-muted-foreground hover:border-input hover:text-foreground"
+        }`}
+        aria-label={`${label} filter`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <Icon name={icon} className="h-3 w-3 shrink-0" aria-hidden="true" />
+        {label}
+        {active ? (
+          <span className="max-w-44 truncate font-medium max-md:max-w-24">
+            {selectedLabels.join(", ")}
+          </span>
+        ) : null}
+        <Icon
+          name="ChevronDown"
+          className="h-3 w-3 shrink-0 opacity-60"
+          aria-hidden="true"
+        />
+      </button>
+      {open ? (
+        <div
+          className="fixed z-50 max-h-[min(20rem,calc(100vh-1rem))] min-w-52 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg"
+          style={menuStyle}
+          role="group"
+          aria-label={`${label} filter options`}
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FilterOption({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-state-hover">
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span
+        className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+          checked ? "border-primary bg-primary text-primary-foreground" : "border-input"
+        }`}
+        aria-hidden="true"
+      >
+        {checked ? <Icon name="Check" className="h-2.5 w-2.5" /> : null}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function sortIssues(issues: readonly Issue[], sort: SortMode) {
+  if (sort === "manual") return [...issues];
+
+  return issues
+    .map((issue, index) => ({ issue, index }))
+    .sort((a, b) => {
+      let result = 0;
+      if (sort === "priority_desc" || sort === "priority_asc") {
+        const direction = sort === "priority_desc" ? 1 : -1;
+        result =
+          ((a.issue.priority ?? 2) - (b.issue.priority ?? 2)) * direction;
+      } else if (sort === "updated_desc" || sort === "created_desc") {
+        const field = sort === "updated_desc" ? "updated_at" : "created_at";
+        const aDate = a.issue[field] ?? "";
+        const bDate = b.issue[field] ?? "";
+        result = String(bDate).localeCompare(String(aDate));
+      } else if (sort === "title_asc") {
+        result = a.issue.title.localeCompare(b.issue.title);
+      }
+      return result || a.index - b.index;
+    })
+    .map(({ issue }) => issue);
+}
+
 function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
   return (
     <button
@@ -172,10 +442,13 @@ function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
       </span>
       <span className="flex shrink-0 items-center gap-2">
         <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusDotClass(issue.status)}`} />
+          <StatusIcon status={issue.status} className="h-3 w-3" />
           {statusLabel(issue.status)}
         </span>
-        <span className="text-xs text-muted-foreground">P{issue.priority ?? 2}</span>
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <PriorityIcon priority={issue.priority} className="h-3 w-3" />
+          P{issue.priority ?? 2}
+        </span>
       </span>
     </button>
   );
@@ -200,7 +473,10 @@ function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
             {issue.issue_type}
           </span>
         ) : null}
-        <span className="text-xs text-muted-foreground">P{issue.priority ?? 2}</span>
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <PriorityIcon priority={issue.priority} className="h-3 w-3" />
+          P{issue.priority ?? 2}
+        </span>
       </span>
     </button>
   );
@@ -476,7 +752,7 @@ function EpicProgressView({
 }: {
   issues: Issue[];
   visibleIssues: Issue[];
-  statusFilter: string;
+  statusFilter: readonly IssueStatus[];
   onOpenIssue: (issue: Issue) => void;
 }) {
   const progress = useMemo(() => buildEpicProgress(issues), [issues]);
@@ -486,10 +762,10 @@ function EpicProgressView({
   );
   const visibleProgress = useMemo(
     () =>
-      progress.filter(
+        progress.filter(
         (entry) =>
-          statusFilter === "all" ||
-          (entry.statusCounts[statusFilter] ?? 0) > 0,
+          statusFilter.length === 0 ||
+          statusFilter.some((status) => (entry.statusCounts[status] ?? 0) > 0),
       ),
     [progress, statusFilter],
   );
@@ -735,12 +1011,10 @@ function IssueDetailsContent({
     }
   }
 
-  const statusCfg = STATUS_CONFIG[issue.status as IssueStatus];
-
   return (
     <div className="h-full overflow-y-auto px-1">
         <div className="mb-4 flex items-center gap-2">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${statusCfg?.dot ?? "bg-muted-foreground"}`} />
+          <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
           <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(issue.status)}`}>
             {statusLabel(issue.status)}
           </span>
@@ -832,7 +1106,9 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [detail, setDetail] = useState<Issue | null>(null);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [selectedStatuses, setSelectedStatuses] = useState<IssueStatus[]>([]);
+  const [selectedPriorities, setSelectedPriorities] = useState<number[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>("manual");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -923,13 +1199,29 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   const visibleIssues = useMemo(() => {
     const statusFiltered =
-      status === "all"
+      selectedStatuses.length === 0
         ? issues
-        : issues.filter((issue) => issue.status === status);
-    return beadsQuery
-      ? statusFiltered
-      : statusFiltered.filter((issue) => issueMatches(issue, query));
-  }, [beadsQuery, issues, query, status]);
+        : issues.filter((issue) =>
+            selectedStatuses.includes(issue.status as IssueStatus),
+          );
+    const priorityFiltered =
+      selectedPriorities.length === 0
+        ? statusFiltered
+        : statusFiltered.filter((issue) =>
+            selectedPriorities.includes(issue.priority ?? 2),
+          );
+    const textFiltered = beadsQuery
+      ? priorityFiltered
+      : priorityFiltered.filter((issue) => issueMatches(issue, query));
+    return sortIssues(textFiltered, sortMode);
+  }, [
+    beadsQuery,
+    issues,
+    query,
+    selectedPriorities,
+    selectedStatuses,
+    sortMode,
+  ]);
 
   function openIssue(issue: Issue) {
     navigate.toPluginPanel("board", {
@@ -993,19 +1285,19 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   // Determine which columns to show based on status filter
   const visibleColumns = useMemo(() => {
     const columns: BoardStatus[] =
-      status === "all"
+      selectedStatuses.length === 0
         ? [...STATUSES]
-        : STATUSES.includes(status as IssueStatus)
-          ? [status as IssueStatus]
+        : selectedStatuses.length > 0
+          ? [...selectedStatuses]
           : [...STATUSES];
     if (
-      status === "all" &&
+      selectedStatuses.length === 0 &&
       issues.some((issue) => !STATUSES.includes(issue.status as IssueStatus))
     ) {
       columns.push(OTHER_STATUS);
     }
     return columns;
-  }, [issues, status]);
+  }, [issues, selectedStatuses]);
 
   if (settingsLoading) {
     return (
@@ -1046,7 +1338,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               onOpenChange={setCreateOpen}
               onCreate={createIssue}
             />
-            <div className="flex min-w-0 flex-1 gap-1.5 @md:grid @md:max-w-[28rem] @md:grid-cols-[minmax(0,1fr)_9rem]">
+            <div className="flex min-w-0 flex-1 @md:max-w-[28rem]">
               <Input
                 aria-label="Search Beads issues"
                 placeholder="Search issues or query"
@@ -1054,23 +1346,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 onChange={(event) => setQuery(event.target.value)}
                 className="min-w-0"
               />
-              <select
-                aria-label="Filter by status"
-                className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2.5 text-xs"
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
-              >
-                <option value="all">All statuses</option>
-                {STATUSES.map((option) => (
-                  <option key={option} value={option}>
-                    {statusLabel(option)}
-                  </option>
-                ))}
-              </select>
             </div>
-            <span className={ISSUE_COUNT_BADGE_CLASS}>
-              {loading ? "Loading…" : `${visibleIssues.length} issues`}
-            </span>
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <Button
                 type="button"
@@ -1121,6 +1397,98 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               </Button>
             </div>
           </div>
+          <div className="mt-1.5 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+              <FilterChip
+                icon="Circle"
+                label="Status"
+                selectedLabels={selectedStatuses.map(statusLabel)}
+              >
+                {STATUSES.map((option) => (
+                  <FilterOption
+                    key={option}
+                    checked={selectedStatuses.includes(option)}
+                    onChange={(checked) =>
+                      setSelectedStatuses((current) =>
+                        checked
+                          ? current.includes(option)
+                            ? current
+                            : [...current, option]
+                          : current.filter((value) => value !== option),
+                      )
+                    }
+                  >
+                    <span className="flex items-center gap-2">
+                      <StatusIcon status={option} className="h-3 w-3" />
+                      {statusLabel(option)}
+                    </span>
+                  </FilterOption>
+                ))}
+              </FilterChip>
+              <FilterChip
+                icon="ArrowUpDown"
+                label="Priority"
+                selectedLabels={selectedPriorities.map(
+                  (priority) => PRIORITY_LABELS[priority],
+                )}
+              >
+                {PRIORITIES.map((priority) => (
+                  <FilterOption
+                    key={priority}
+                    checked={selectedPriorities.includes(priority)}
+                    onChange={(checked) =>
+                      setSelectedPriorities((current) =>
+                        checked
+                          ? current.includes(priority)
+                            ? current
+                            : [...current, priority]
+                          : current.filter((value) => value !== priority),
+                      )
+                    }
+                  >
+                    <span className="flex items-center gap-2">
+                      <PriorityIcon priority={priority} className="h-3 w-3" />
+                      {PRIORITY_LABELS[priority]}
+                    </span>
+                  </FilterOption>
+                ))}
+              </FilterChip>
+              {selectedStatuses.length > 0 || selectedPriorities.length > 0 ? (
+                <button
+                  type="button"
+                  className="flex h-6 shrink-0 items-center gap-1 rounded-md border border-dashed border-border px-2.5 text-xs text-muted-foreground hover:border-input hover:text-foreground max-md:pointer-coarse:h-8"
+                  onClick={() => {
+                    setSelectedStatuses([]);
+                    setSelectedPriorities([]);
+                  }}
+                >
+                  <Icon name="X" className="h-3 w-3" aria-hidden="true" />
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+              {loading ? "Loading…" : `${visibleIssues.length} issues`}
+            </span>
+            <FilterChip
+              icon="Sort"
+              label="Sort"
+              selectedLabels={sortMode === "manual" ? [] : [SORT_LABELS[sortMode]]}
+              align="end"
+            >
+              {(Object.keys(SORT_LABELS) as SortMode[]).map((option) => (
+                <FilterOption
+                  key={option}
+                  checked={sortMode === option}
+                  onChange={(checked) => {
+                    if (checked) setSortMode(option);
+                  }}
+                >
+                  {SORT_LABELS[option]}
+                </FilterOption>
+              ))}
+            </FilterChip>
+          </div>
           {error ? (
             <div className="mt-3">
               <ErrorCard message={error} />
@@ -1156,7 +1524,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             <EpicProgressView
               issues={issues}
               visibleIssues={visibleIssues}
-              statusFilter={status}
+              statusFilter={selectedStatuses}
               onOpenIssue={openIssue}
             />
           )}
