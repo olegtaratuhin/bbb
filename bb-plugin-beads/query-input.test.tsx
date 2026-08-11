@@ -24,7 +24,9 @@ describe("QueryInput", () => {
     const listbox = screen.getByRole("listbox", { name: "Beads query completions" });
     expect(screen.getAllByTestId("beads-query-completion-surface")).toHaveLength(1);
     expect(listbox.getAttribute("aria-orientation")).toBe("vertical");
+    expect(listbox.className).toContain("max-md:pointer-coarse:fixed");
     expect(within(listbox).getByRole("option", { name: "open" }).classList.contains("min-h-11")).toBe(true);
+    expect(within(listbox).getByRole("option", { name: "open" }).className).toContain("max-md:pointer-coarse:min-h-12");
     expect(within(listbox).getByRole("option", { name: "open" })).toBeTruthy();
     fireEvent.click(within(listbox).getByRole("option", { name: "open" }));
 

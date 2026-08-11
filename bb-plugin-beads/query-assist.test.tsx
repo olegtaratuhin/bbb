@@ -76,6 +76,15 @@ describe("QueryAssist", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
+  it("keeps the raw query unchanged when assistance is dismissed", () => {
+    renderAssist("status=open");
+    const dialog = openAssist();
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Build a query" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByTestId("query-output").textContent).toBe("status=open");
+  });
+
   it("can compose a preset with an existing valid query", () => {
     renderAssist("type=bug");
     const dialog = openAssist();

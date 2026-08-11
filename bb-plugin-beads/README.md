@@ -120,6 +120,31 @@ against sending malformed expressions to the backend. When a query passes
 local validation, it is wrapped in parentheses and combined with any
 active status/priority filter clauses before `bd query` execution.
 
+### Mobile query assistance
+
+On narrow coarse-pointer clients, the completion list becomes a single
+scrollable, safe-area-aware bottom surface with touch-sized options. The
+sliders button opens a responsive query-assistance drawer containing quick
+filters, curated valid examples, bounded local-only recent history, and a
+schema-backed filter builder. Applying a preset or builder expression updates
+the same controlled search input and execution path as typing; users can
+replace the current query or add a valid expression with `AND`. Invalid or
+incomplete builder rows stay in the drawer with an error message.
+
+Manual mobile smoke checklist:
+
+- iOS Safari and Android Chrome: focus the search field, confirm the completion
+  surface remains above the soft keyboard, scroll a long value list, choose a
+  completion, and dismiss with Escape/back or outside tap.
+- Open query assistance, switch between quick filters, examples, and builder;
+  verify 44px touch targets, no duplicate completion surface, and query text
+  remains after cancel.
+- Build a status + priority filter, apply it, then refresh and confirm the
+  result request uses the same project and debounce behavior as typed search.
+- Enter an incomplete or invalid row and verify no search request is sent until
+  the expression is corrected; clear recent history and confirm it is removed
+  from the device-local surface.
+
 The panel follows the project currently selected in BB. Its resolution order
 is:
 
