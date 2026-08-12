@@ -2328,7 +2328,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   async function initializeSelectedProject() {
-    if (!activeProject || !activeProject.canInitialize || projectSelectionLocked) {
+    if (!activeProject || !activeProject.canInitialize || workspacePathOverride) {
       return;
     }
     setInitializingProject(true);
