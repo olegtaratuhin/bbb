@@ -48,6 +48,7 @@ describe("QueryInput", () => {
     expect(input.className).toContain("font-[inherit]");
     expect(input.className).toContain("leading-5");
     expect(listbox.className).toContain("fixed");
+    expect(listbox.className).toContain("z-50");
     expect(listbox.className).toContain("top-[var(--beads-query-completion-top)]");
     expect(listbox.parentElement).toBe(document.body);
   });
@@ -93,6 +94,8 @@ describe("QueryInput", () => {
     expect(screen.getByTestId("beads-query-highlight").textContent).toBe("priority=9");
     const diagnostic = screen.getByRole("alert");
     expect(diagnostic.textContent).toContain("from 0 to 4");
+    expect(diagnostic.className).toContain("fixed");
+    expect(diagnostic.parentElement).toBe(document.body);
     expect(input.getAttribute("aria-describedby")).toBe("beads-query-diagnostics");
   });
 

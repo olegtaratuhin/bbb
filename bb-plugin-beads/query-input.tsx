@@ -37,7 +37,7 @@ export function QueryInput({
   const [focused, setFocused] = useState(false);
   const [cursor, setCursor] = useState(value.length);
   const [activeSuggestion, setActiveSuggestion] = useState(0);
-  const [completionPosition, setCompletionPosition] = useState<{
+  const [floatingPosition, setFloatingPosition] = useState<{
     left: number;
     top: number;
     width: number;
@@ -56,8 +56,8 @@ export function QueryInput({
   }, [value, cursor]);
 
   useLayoutEffect(() => {
-    if (!focused || suggestions.length === 0) {
-      setCompletionPosition(null);
+    if ((!focused && diagnostics.length === 0) || (focused && suggestions.length === 0 && diagnostics.length === 0)) {
+      setFloatingPosition(null);
       return;
     }
 
@@ -67,7 +67,7 @@ export function QueryInput({
 
     function updateCompletionPosition() {
       const rect = frameElement.getBoundingClientRect();
-      setCompletionPosition({
+      setFloatingPosition({
         left: rect.left,
         top: rect.bottom + 4,
         width: rect.width,
@@ -81,7 +81,7 @@ export function QueryInput({
       window.removeEventListener("resize", updateCompletionPosition);
       window.removeEventListener("scroll", updateCompletionPosition, true);
     };
-  }, [focused, suggestions.length]);
+  }, [diagnostics.length, focused, suggestions.length]);
 
   function updateCursor() {
     setCursor(inputRef.current?.selectionStart ?? value.length);
@@ -182,7 +182,7 @@ export function QueryInput({
             }}
           />
         </div>
-        {focused && suggestions.length > 0 && completionPosition && typeof document !== "undefined"
+        {focused && suggestions.length > 0 && floatingPosition && typeof document !== "undefined"
           ? createPortal(
               <div
                 role="listbox"
@@ -191,11 +191,11 @@ export function QueryInput({
                 id="beads-query-completions"
                 data-testid="beads-query-completion-surface"
                 style={{
-                  "--beads-query-completion-left": `${completionPosition.left}px`,
-                  "--beads-query-completion-top": `${completionPosition.top}px`,
-                  "--beads-query-completion-width": `${completionPosition.width}px`,
+                  "--beads-query-completion-left": `${floatingPosition.left}px`,
+                  "--beads-query-completion-top": `${floatingPosition.top}px`,
+                  "--beads-query-completion-width": `${floatingPosition.width}px`,
                 } as React.CSSProperties}
-                className="fixed left-[var(--beads-query-completion-left)] top-[var(--beads-query-completion-top)] z-30 mt-0 grid w-[var(--beads-query-completion-width)] max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md [scrollbar-width:thin] max-md:pointer-coarse:inset-x-3 max-md:pointer-coarse:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:pointer-coarse:top-auto max-md:pointer-coarse:w-auto max-md:pointer-coarse:max-h-[min(20rem,45dvh)] max-md:pointer-coarse:rounded-xl max-md:pointer-coarse:p-2 max-md:pointer-coarse:text-base max-md:pointer-coarse:shadow-lg"
+                className="fixed left-[var(--beads-query-completion-left)] top-[var(--beads-query-completion-top)] z-50 mt-0 grid w-[var(--beads-query-completion-width)] max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md [scrollbar-width:thin] max-md:pointer-coarse:inset-x-3 max-md:pointer-coarse:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:pointer-coarse:top-auto max-md:pointer-coarse:w-auto max-md:pointer-coarse:max-h-[min(20rem,45dvh)] max-md:pointer-coarse:rounded-xl max-md:pointer-coarse:p-2 max-md:pointer-coarse:text-base max-md:pointer-coarse:shadow-lg"
               >
                 {suggestions.map((item) => (
                   <button
@@ -218,11 +218,23 @@ export function QueryInput({
             )
           : null}
       </div>
-      {diagnostics.length > 0 ? (
-        <div id="beads-query-diagnostics" className="mt-1 truncate text-[11px] text-destructive" role="alert">
-          {diagnostics[0]?.message}
-        </div>
-      ) : null}
+      {diagnostics.length > 0 && suggestions.length === 0 && floatingPosition && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              id="beads-query-diagnostics"
+              role="alert"
+              style={{
+                "--beads-query-completion-left": `${floatingPosition.left}px`,
+                "--beads-query-completion-top": `${floatingPosition.top}px`,
+                "--beads-query-completion-width": `${floatingPosition.width}px`,
+              } as React.CSSProperties}
+              className="fixed left-[var(--beads-query-completion-left)] top-[var(--beads-query-completion-top)] z-50 max-w-[min(24rem,calc(100vw-1.5rem))] truncate rounded-md border border-destructive/30 bg-popover px-2.5 py-1.5 text-[11px] text-destructive shadow-md"
+            >
+              {diagnostics[0]?.message}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

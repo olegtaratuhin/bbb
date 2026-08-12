@@ -618,14 +618,14 @@ function KanbanColumn({
 }) {
   const config = status === OTHER_STATUS ? OTHER_STATUS_CONFIG : STATUS_CONFIG[status];
   const [expanded, setExpanded] = useState(() => issues.length > 0);
-  const headerClass = `flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide border-t-2 ${config.header}`;
+  const headerClass = `flex h-9 min-h-9 items-center justify-between overflow-hidden rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide border-t-2 ${config.header}`;
   const header = (
     <>
-      <span className="flex items-center gap-2">
+      <span className="flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap">
         <StatusIcon status={status} className="h-3.5 w-3.5 shrink-0" />
-        {config.label}
+        <span className="truncate">{config.label}</span>
       </span>
-      <span className="flex items-center gap-2">
+      <span className="flex shrink-0 items-center gap-2">
         <span className={COLUMN_COUNT_BADGE_CLASS}>{issues.length}</span>
         <Icon
           name="ChevronDown"
