@@ -78,6 +78,40 @@ function makeHost(options: {
 }
 
 describe("Beads server host routing", () => {
+  it("lists all Beads-backed projects for the project switcher", async () => {
+    const execute = vi.fn(async (request: { args: readonly string[] }) => ({
+      status: "exited" as const,
+      exitCode: 0,
+      stdout: request.args.includes("--limit") ? JSON.stringify([]) : JSON.stringify(issue),
+      stderr: "",
+      errorCode: null,
+      error: null,
+    }));
+    const { bb, registrations } = makeHost({
+      projects: [
+        {
+          id: "proj-one",
+          name: "One",
+          sources: [{ type: "local_path", path: "/one", isDefault: true }],
+        },
+        {
+          id: "proj-two",
+          name: "Two",
+          sources: [{ type: "local_path", path: "/two", isDefault: true }],
+        },
+      ],
+      execute,
+    });
+    await plugin(bb);
+
+    await expect(registrations.handlers.listProjects({})).resolves.toEqual({
+      projects: [
+        { id: "proj-one", name: "One" },
+        { id: "proj-two", name: "Two" },
+      ],
+    });
+  });
+
   it("discovers the only Beads project when the browser has no route project", async () => {
     const execute = vi.fn(async (request: { args: readonly string[] }) => ({
       status: "exited" as const,

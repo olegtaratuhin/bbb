@@ -54,6 +54,7 @@ describe("Beads server harness", () => {
     await plugin(host.bb);
 
     expect(host.harness.registrations.rpcMethods).toEqual([
+      "listProjects",
       "listIssues",
       "showIssue",
       "createIssue",

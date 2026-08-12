@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   definePluginApp,
+  experimental_useSidebarThreads,
   Markdown,
   useBbContext,
   useBbNavigate,
@@ -62,6 +63,7 @@ import {
   projectIdFromComposerScope,
   readRootComposeProjectId,
 } from "./project-context";
+import { chooseDefaultBeadsProject } from "./project-selection";
 
 const STATUSES = [
   "open",
@@ -95,6 +97,11 @@ type EpicSortMode =
   | "title_asc";
 
 type ViewMode = "kanban" | "list" | "graph" | "epics";
+
+type BeadsProjectOption = {
+  id: string;
+  name: string;
+};
 
 const STATUS_CONFIG: Record<
   IssueStatus,
@@ -1922,6 +1929,7 @@ function IssueDetailsContent({
 
 function BeadsPanel({ subPath }: { subPath: string }) {
   const { projectId } = useBbContext();
+  const sidebarThreads = experimental_useSidebarThreads();
   const composerView = useComposerView();
   const { values: settingValues, isLoading: settingsLoading } = useSettings();
   const navigate = useBbNavigate();
@@ -1944,6 +1952,9 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [graphOrientation, setGraphOrientation] =
     useState<GraphOrientation>("horizontal");
   const [epicRailOpen, setEpicRailOpen] = useState(false);
+  const [beadsProjects, setBeadsProjects] = useState<BeadsProjectOption[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
       typeof window === "undefined" ? undefined : window.localStorage,
@@ -1964,7 +1975,58 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     rootComposeProjectId,
     routeProjectId: projectId,
   });
-  const rpcProjectId = workspacePathOverride ? undefined : currentProjectId;
+  const automaticProjectId = useMemo(
+    () =>
+      chooseDefaultBeadsProject({
+        currentProjectId,
+        projects: beadsProjects,
+        threads: sidebarThreads.threads,
+      }),
+    [beadsProjects, currentProjectId, sidebarThreads.threads],
+  );
+  const activeProjectId = workspacePathOverride
+    ? null
+    : configuredProjectId ?? selectedProjectId ?? automaticProjectId;
+  const projectSelectionLocked = Boolean(configuredProjectId || workspacePathOverride);
+  const projectResolutionReady = Boolean(workspacePathOverride) || !projectsLoading;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (workspacePathOverride) {
+      setBeadsProjects([]);
+      setProjectsLoading(false);
+      return;
+    }
+    setProjectsLoading(true);
+    void rpc.call("listProjects", {}).then(
+      (result) => {
+        if (cancelled) return;
+        setBeadsProjects(result.projects as BeadsProjectOption[]);
+        setProjectsLoading(false);
+      },
+      (cause) => {
+        if (cancelled) return;
+        setBeadsProjects([]);
+        setProjectsLoading(false);
+        setError(cause instanceof Error ? cause.message : "Unable to discover Beads projects");
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [workspacePathOverride]);
+
+  useEffect(() => {
+    setSelectedProjectId(null);
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    if (activeProjectId && !beadsProjects.some((project) => project.id === activeProjectId)) {
+      setSelectedProjectId(null);
+    }
+  }, [activeProjectId, beadsProjects]);
+
+  const effectiveRpcProjectId = workspacePathOverride ? undefined : activeProjectId ?? undefined;
   const selectedId = subPath.startsWith("issue/")
     ? decodeURIComponent(subPath.slice("issue/".length))
     : null;
@@ -1999,7 +2061,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setError(null);
     try {
       const result = await rpc.call("listIssues", {
-        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
+        ...(effectiveRpcProjectId ? { projectId: effectiveRpcProjectId } : {}),
         ...(beadsQuery ? { query: beadsQuery } : {}),
       });
       if (generation !== listRequestGeneration.current) return;
@@ -2019,7 +2081,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     }
     try {
       const result = await rpc.call("showIssue", {
-        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
+        ...(effectiveRpcProjectId ? { projectId: effectiveRpcProjectId } : {}),
         id: selectedId,
       });
       setDetail(result.issue as Issue);
@@ -2029,6 +2091,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   useEffect(() => {
+    if (!projectResolutionReady) return;
     const delay = queryExecution.mode === "query"
       ? QUERY_EXECUTION_DEBOUNCE_MS
       : 0;
@@ -2040,13 +2103,15 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     queryExecution.mode,
     queryMode,
     refresh,
-    rpcProjectId,
+    effectiveRpcProjectId,
+    projectResolutionReady,
     workspacePathOverride,
   ]);
 
   useEffect(() => {
+    if (!projectResolutionReady) return;
     void loadDetail();
-  }, [rpcProjectId, selectedId, refresh, workspacePathOverride]);
+  }, [effectiveRpcProjectId, projectResolutionReady, selectedId, refresh, workspacePathOverride]);
 
   const selectedEpic = useMemo(
     () =>
@@ -2144,6 +2209,20 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setCreateOpen(true);
   }
 
+  function selectProject(nextProjectId: string) {
+    if (!nextProjectId || projectSelectionLocked) return;
+    setSelectedProjectId(nextProjectId);
+    setIssues([]);
+    setDetail(null);
+    setError(null);
+    setEpicScopeId(null);
+    setEpicScopeEnabled(false);
+    setGraphFocusId(null);
+    if (selectedId) {
+      navigate.toPluginPanel("board", { subPath: "", replace: true });
+    }
+  }
+
   function handleCreateOpenChange(open: boolean) {
     setCreateOpen(open);
     if (!open) setCreateType("task");
@@ -2165,7 +2244,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setError(null);
     try {
       const result = await rpc.call("createIssue", {
-        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
+        ...(effectiveRpcProjectId ? { projectId: effectiveRpcProjectId } : {}),
         ...input,
       });
       setRefresh((value) => value + 1);
@@ -2191,7 +2270,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setError(null);
     try {
       await rpc.call("updateIssue", {
-        ...(rpcProjectId ? { projectId: rpcProjectId } : {}),
+        ...(effectiveRpcProjectId ? { projectId: effectiveRpcProjectId } : {}),
         id: selectedId,
         ...input,
       });
@@ -2236,6 +2315,38 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-1.5">
         <div className="w-full">
           <div className="flex min-w-0 items-center gap-2">
+            <div
+              className="relative flex min-w-0 max-w-48 shrink-0 overflow-hidden rounded-md border border-border"
+              role="group"
+              aria-label="Beads project"
+            >
+              <select
+                aria-label="Beads project"
+                className="h-8 min-w-0 max-w-48 appearance-none bg-transparent px-2 pr-7 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                value={activeProjectId ?? ""}
+                disabled={projectSelectionLocked || projectsLoading || beadsProjects.length === 0}
+                onChange={(event) => selectProject(event.target.value)}
+              >
+                {workspacePathOverride ? (
+                  <option value="">Workspace override</option>
+                ) : projectsLoading ? (
+                  <option value="">Finding projects…</option>
+                ) : beadsProjects.length === 0 ? (
+                  <option value="">No Beads projects</option>
+                ) : (
+                  beadsProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))
+                )}
+              </select>
+              <Icon
+                name="ChevronDown"
+                className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </div>
             <div
               className="relative flex shrink-0 overflow-hidden rounded-md border border-border"
               role="group"

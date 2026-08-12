@@ -155,6 +155,7 @@ export function createFakePluginHost(options: CreateFakePluginHostOptions = {}) 
             sources: sdkOverrides.projectSources ?? [],
           };
         },
+        list: async () => [],
       },
       system: {
         config: async () => {

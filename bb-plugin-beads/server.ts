@@ -41,10 +41,18 @@ const issueSchema = z
 
 const projectInput = z.object({ projectId: z.string().min(1).optional() });
 const issueIdInput = projectInput.extend({ id: z.string().min(1) });
+const beadsProjectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
 
 const issueOutput = z.object({ issue: issueSchema });
 
 export const rpcContract = defineRpcContract({
+  listProjects: {
+    input: z.object({}),
+    output: z.object({ projects: z.array(beadsProjectSchema) }),
+  },
   listIssues: {
     input: projectInput.extend({
       status: z.string().optional(),
@@ -222,19 +230,7 @@ async function projectTarget(
 async function discoverBeadsProject(
   bb: BbPluginApi,
 ): Promise<{ kind: "project"; projectId: string } | null> {
-  const projects = (await bb.sdk.projects.list()) as readonly ProjectLike[];
-  const matches: ProjectLike[] = [];
-
-  for (const project of projects) {
-    const target = await projectTarget(bb, project);
-    if (!target) continue;
-    const result = await runBdAtTarget(
-      bb,
-      target,
-      ["list", "--all", "--flat", "--limit", "1"],
-    );
-    if (result.ok) matches.push(project);
-  }
+  const matches = await findBeadsProjects(bb);
 
   if (matches.length === 1) {
     return { kind: "project", projectId: matches[0]!.id };
@@ -248,6 +244,23 @@ async function discoverBeadsProject(
     );
   }
   return null;
+}
+
+async function findBeadsProjects(bb: BbPluginApi): Promise<ProjectLike[]> {
+  const projects = (await bb.sdk.projects.list()) as readonly ProjectLike[];
+  const matches: ProjectLike[] = [];
+
+  for (const project of projects) {
+    const target = await projectTarget(bb, project);
+    if (!target) continue;
+    const result = await runBdAtTarget(
+      bb,
+      target,
+      ["list", "--all", "--flat", "--limit", "1"],
+    );
+    if (result.ok) matches.push(project);
+  }
+  return matches;
 }
 
 async function runProjectBd(
@@ -308,6 +321,15 @@ export default async function plugin(bb: BbPluginApi) {
   });
 
   bb.rpc.register(rpcContract, {
+    async listProjects() {
+      const projects = await findBeadsProjects(bb);
+      return {
+        projects: projects.map((project) => ({
+          id: project.id,
+          name: project.name?.trim() || project.id,
+        })),
+      };
+    },
     async listIssues({ projectId, status, priority, query }) {
       const value = await runProjectBd(
         bb,
