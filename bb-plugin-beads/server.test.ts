@@ -52,8 +52,11 @@ function makeHost(options: {
     },
     sdk: {
       projects: {
-        get: vi.fn(async () => ({
-          sources: options.projectSources ?? [],
+        get: vi.fn(async ({ projectId }: { projectId?: string } = {}) => ({
+          sources:
+            options.projects?.find((project) => project.id === projectId)?.sources ??
+            options.projectSources ??
+            [],
         })),
         list: vi.fn(async () => options.projects ?? []),
       },
@@ -129,6 +132,54 @@ describe("Beads server host routing", () => {
         cwd: "/remote/beads",
       }),
     );
+  });
+
+  it("falls back when the current BB project has no Beads database", async () => {
+    const execute = vi.fn(async (request: { cwd: string; args: readonly string[] }) => {
+      if (request.cwd === "/current/project") {
+        return {
+          status: "exited" as const,
+          exitCode: 1,
+          stdout: "",
+          stderr: "Error: no beads database found",
+          errorCode: null,
+          error: null,
+        };
+      }
+      return {
+        status: "exited" as const,
+        exitCode: 0,
+        stdout: request.args.includes("--limit") ? JSON.stringify([]) : JSON.stringify(issue),
+        stderr: "",
+        errorCode: null,
+        error: null,
+      };
+    });
+    const { bb, registrations } = makeHost({
+      projectSources: [
+        { type: "local_path", path: "/current/project", isDefault: true },
+      ],
+      projects: [
+        {
+          id: "proj-beads",
+          name: "Beads project",
+          sources: [
+            { type: "local_path", path: "/beads/project", isDefault: true },
+          ],
+        },
+      ],
+      execute,
+    });
+    await plugin(bb);
+
+    await expect(
+      registrations.handlers.listIssues({ projectId: "proj-current" }),
+    ).resolves.toEqual({ issues: [expect.objectContaining({ id: issue.id })] });
+    expect(execute.mock.calls.map(([request]) => request.cwd)).toEqual([
+      "/current/project",
+      "/beads/project",
+      "/beads/project",
+    ]);
   });
 
   it("requires an override when multiple projects contain Beads", async () => {

@@ -105,6 +105,13 @@ function errorMessage(result: { kind: string; message?: string; stderr?: string;
   return result.message ?? (result.stderr?.trim() || "bd command failed");
 }
 
+function isMissingBeadsDatabase(result: { ok: boolean; kind?: string; stdout?: string; stderr?: string; message?: string; error?: string }) {
+  if (result.ok) return false;
+  return /no beads database found|no active beads workspace|no beads workspace|\.beads/i.test(
+    [result.message, result.error, result.stdout, result.stderr].filter(Boolean).join("\n"),
+  );
+}
+
 function asIssue(value: unknown): Issue {
   const issue = normalizeIssues(value)[0];
   if (!issue || !issue.id) {
@@ -250,7 +257,31 @@ async function runProjectBd(
   args: readonly string[],
 ) {
   const target = await getWorkspaceTarget(bb, settings, projectId);
-  const result = await runBdAtTarget(bb, target, args);
+  let result = await runBdAtTarget(bb, target, args);
+
+  // The nav panel can be opened while BB is focused on an ordinary project
+  // that has no .beads directory. Treat that route project as a preference,
+  // not an override, and recover by discovering the sole Beads project. An
+  // explicit setting remains authoritative so configuration errors stay
+  // visible instead of silently selecting another repository.
+  const configured = await settings.get();
+  if (
+    !result.ok &&
+    projectId &&
+    !configured.projectId?.trim() &&
+    !configured.workspacePath?.trim() &&
+    isMissingBeadsDatabase(result)
+  ) {
+    const discovered = await discoverBeadsProject(bb);
+    if (discovered && discovered.projectId !== projectId) {
+      const fallbackTarget = await getWorkspaceTarget(
+        bb,
+        settings,
+        discovered.projectId,
+      );
+      result = await runBdAtTarget(bb, fallbackTarget, args);
+    }
+  }
   if (!result.ok) {
     throw new Error(errorMessage(result));
   }
