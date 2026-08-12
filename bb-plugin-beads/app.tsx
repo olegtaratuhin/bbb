@@ -1995,11 +1995,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       setLoading(false);
       return;
     }
-    if (!rpcProjectId && !workspacePathOverride) {
-      setIssues([]);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -2018,7 +2013,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   async function loadDetail() {
-    if ((!rpcProjectId && !workspacePathOverride) || !selectedId) {
+    if (!selectedId) {
       setDetail(null);
       return;
     }
@@ -2167,9 +2162,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     priority: number;
     description?: string;
   }) {
-    if (!rpcProjectId && !workspacePathOverride) {
-      return;
-    }
     setError(null);
     try {
       const result = await rpc.call("createIssue", {
@@ -2193,7 +2185,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     description?: string;
     acceptance?: string;
   }) {
-    if ((!rpcProjectId && !workspacePathOverride) || !selectedId) {
+    if (!selectedId) {
       return;
     }
     setError(null);
@@ -2233,22 +2225,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
           <CardContent className="p-4 text-sm text-muted-foreground">
             Loading Beads settings…
           </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!rpcProjectId && !workspacePathOverride) {
-    return (
-      <div className="h-full overflow-y-auto p-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Beads</CardTitle>
-            <CardDescription>
-              Open a BB project or configure a Beads project/path override in
-              Settings → Extensions → Beads.
-            </CardDescription>
-          </CardHeader>
         </Card>
       </div>
     );

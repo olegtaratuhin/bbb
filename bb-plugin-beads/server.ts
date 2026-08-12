@@ -87,6 +87,14 @@ interface BeadsSettings {
   }>;
 }
 
+type HostExecute = NonNullable<Parameters<typeof runBdJson>[1]>["execute"];
+
+interface ProjectLike {
+  id: string;
+  name?: string | null;
+  sources: readonly ProjectSourceLike[];
+}
+
 function errorMessage(result: { kind: string; message?: string; stderr?: string; error?: string }) {
   if (result.kind === "spawn") {
     return result.message ?? "Unable to start bd";
@@ -111,16 +119,16 @@ async function getWorkspaceTarget(
   projectId?: string,
 ) {
   const configured = await settings.get();
-  const target = resolveWorkspaceTarget({
+  let target = resolveWorkspaceTarget({
     configuredProjectId: configured.projectId,
     projectId,
     workspacePath: configured.workspacePath,
   });
-  if (target === null) {
+  if (target === null) target = await discoverBeadsProject(bb);
+  if (target === null)
     throw new Error(
-      "No BB project is selected. Open a project in BB or configure a Beads project/path override in Settings.",
+      "No Beads project was found among the BB projects. Open a project with .beads or configure a Beads project/path override in Settings.",
     );
-  }
   if (target.kind === "path") return { path: target.path };
 
   const project = await bb.sdk.projects.get({ projectId: target.projectId });
@@ -133,6 +141,108 @@ async function getWorkspaceTarget(
   };
 }
 
+function hostExecutor(bb: BbPluginApi): HostExecute | undefined {
+  // Older installed BB servers may expose declarations without the host
+  // command transport. Keep the plugin loadable and fail closed for remote
+  // project sources below instead of spawning on the server by accident.
+  return (
+    bb.hosts as unknown as { execute?: HostExecute } | undefined
+  )?.execute;
+}
+
+async function assertHostRouting(
+  bb: BbPluginApi,
+  target: { path: string; hostId?: string },
+  execute: HostExecute | undefined,
+) {
+  if (typeof execute === "function" && target.hostId !== undefined) return;
+  if (target.hostId === undefined) return;
+
+  let isPrimaryHost = false;
+  try {
+    const system = await bb.sdk.system.config();
+    isPrimaryHost =
+      system.primaryHostId === null || system.primaryHostId === target.hostId;
+  } catch {
+    // An older BB may not expose the system metadata needed to prove that a
+    // project source is local. Fail closed rather than running on the wrong
+    // filesystem host.
+  }
+  if (!isPrimaryHost) {
+    throw new Error(
+      "This BB server does not support host-routed Beads commands. Update or restart BB before opening a project on another machine.",
+    );
+  }
+}
+
+async function runBdAtTarget(
+  bb: BbPluginApi,
+  target: { path: string; hostId?: string },
+  args: readonly string[],
+) {
+  const execute = hostExecutor(bb);
+  await assertHostRouting(bb, target, execute);
+  return runBdJson(args, {
+    cwd: target.path,
+    ...(typeof execute === "function" && target.hostId !== undefined
+      ? { hostId: target.hostId }
+      : {}),
+    ...(typeof execute === "function" ? { execute } : {}),
+  });
+}
+
+async function projectTarget(
+  bb: BbPluginApi,
+  project: ProjectLike,
+): Promise<{ path: string; hostId?: string } | null> {
+  try {
+    const source = selectLocalWorkspaceSource(project.sources);
+    return {
+      path: source.path!.trim(),
+      ...(source.hostId !== undefined ? { hostId: source.hostId } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Nav-panel routes do not carry the project selected on another BB surface.
+ * Resolve that missing context on the BB host rather than relying on browser
+ * localStorage or trying to run bd in the remote browser. A single matching
+ * project is unambiguous; multiple matches require the explicit setting.
+ */
+async function discoverBeadsProject(
+  bb: BbPluginApi,
+): Promise<{ kind: "project"; projectId: string } | null> {
+  const projects = (await bb.sdk.projects.list()) as readonly ProjectLike[];
+  const matches: ProjectLike[] = [];
+
+  for (const project of projects) {
+    const target = await projectTarget(bb, project);
+    if (!target) continue;
+    const result = await runBdAtTarget(
+      bb,
+      target,
+      ["list", "--all", "--flat", "--limit", "1"],
+    );
+    if (result.ok) matches.push(project);
+  }
+
+  if (matches.length === 1) {
+    return { kind: "project", projectId: matches[0]!.id };
+  }
+  if (matches.length > 1) {
+    const names = matches
+      .map((project) => project.name?.trim() || project.id)
+      .join(", ");
+    throw new Error(
+      `Multiple BB projects contain Beads (${names}). Configure a Beads project override in Settings.`,
+    );
+  }
+  return null;
+}
+
 async function runProjectBd(
   bb: BbPluginApi,
   settings: BeadsSettings,
@@ -140,38 +250,7 @@ async function runProjectBd(
   args: readonly string[],
 ) {
   const target = await getWorkspaceTarget(bb, settings, projectId);
-  // `execute` was added to the BB host API after the SDK declaration bundled
-  // with some installed servers. Keep the plugin loadable against those
-  // declarations while feature-detecting the runtime capability.
-  const hostExecute = (
-    bb.hosts as unknown as
-      | { execute?: NonNullable<Parameters<typeof runBdJson>[1]>["execute"] }
-      | undefined
-  )?.execute;
-  if (typeof hostExecute !== "function" && target.hostId !== undefined) {
-    let isPrimaryHost = false;
-    try {
-      const system = await bb.sdk.system.config();
-      isPrimaryHost =
-        system.primaryHostId === null || system.primaryHostId === target.hostId;
-    } catch {
-      // An older BB may not expose the system metadata needed to prove that a
-      // project source is local. Fail closed rather than running on the wrong
-      // filesystem host.
-    }
-    if (!isPrimaryHost) {
-      throw new Error(
-        "This BB server does not support host-routed Beads commands. Update or restart BB before opening a project on another machine.",
-      );
-    }
-  }
-  const result = await runBdJson(args, {
-    cwd: target.path,
-    ...(typeof hostExecute === "function" && target.hostId !== undefined
-      ? { hostId: target.hostId }
-      : {}),
-    ...(typeof hostExecute === "function" ? { execute: hostExecute } : {}),
-  });
+  const result = await runBdAtTarget(bb, target, args);
   if (!result.ok) {
     throw new Error(errorMessage(result));
   }

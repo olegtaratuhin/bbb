@@ -20,6 +20,7 @@ const issue = {
 function makeHost(options: {
   workspacePath?: string;
   projectSources?: Array<Record<string, unknown>>;
+  projects?: Array<Record<string, unknown>>;
   execute?: ReturnType<typeof vi.fn>;
   primaryHostId?: string | null;
   legacyHostApi?: boolean;
@@ -54,6 +55,7 @@ function makeHost(options: {
         get: vi.fn(async () => ({
           sources: options.projectSources ?? [],
         })),
+        list: vi.fn(async () => options.projects ?? []),
       },
       system: {
         config: vi.fn(async () => ({
@@ -73,6 +75,92 @@ function makeHost(options: {
 }
 
 describe("Beads server host routing", () => {
+  it("discovers the only Beads project when the browser has no route project", async () => {
+    const execute = vi.fn(async (request: { args: readonly string[] }) => ({
+      status: "exited" as const,
+      exitCode: 0,
+      stdout: request.args.includes("--limit")
+        ? JSON.stringify([])
+        : JSON.stringify(issue),
+      stderr: "",
+      errorCode: null,
+      error: null,
+    }));
+    const { bb, registrations } = makeHost({
+      projectSources: [
+        {
+          type: "local_path",
+          path: "/remote/beads",
+          hostId: "host-remote",
+          isDefault: true,
+        },
+      ],
+      projects: [
+        {
+          id: "proj-auto",
+          name: "Remote project",
+          sources: [
+            {
+              type: "local_path",
+              path: "/remote/beads",
+              hostId: "host-remote",
+              isDefault: true,
+            },
+          ],
+        },
+      ],
+      execute,
+    });
+    await plugin(bb);
+
+    await registrations.handlers.listIssues({});
+
+    expect(execute).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        hostId: "host-remote",
+        cwd: "/remote/beads",
+      }),
+    );
+    expect(execute).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        hostId: "host-remote",
+        cwd: "/remote/beads",
+      }),
+    );
+  });
+
+  it("requires an override when multiple projects contain Beads", async () => {
+    const { bb, registrations } = makeHost({
+      projects: [
+        {
+          id: "proj-one",
+          name: "One",
+          sources: [{ type: "local_path", path: "/one", isDefault: true }],
+        },
+        {
+          id: "proj-two",
+          name: "Two",
+          sources: [{ type: "local_path", path: "/two", isDefault: true }],
+        },
+      ],
+      execute: vi.fn(async () => ({
+        status: "exited" as const,
+        exitCode: 0,
+        stdout: JSON.stringify([]),
+        stderr: "",
+        errorCode: null,
+        error: null,
+      })),
+    });
+    await plugin(bb);
+
+    await expect(registrations.handlers.listIssues({})).rejects.toThrow(
+      "Multiple BB projects contain Beads",
+    );
+  });
+
   it("forwards the project source host for queries and mutations", async () => {
     const { bb, execute, registrations } = makeHost({
       projectSources: [
@@ -130,7 +218,7 @@ describe("Beads server host routing", () => {
     const missing = makeHost();
     await plugin(missing.bb);
     await expect(missing.registrations.handlers.listIssues({})).rejects.toThrow(
-      "No BB project is selected",
+      "No Beads project was found",
     );
 
     const disconnected = makeHost({

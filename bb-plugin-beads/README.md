@@ -152,6 +152,14 @@ is:
 2. the Beads **Project override** setting, when configured;
 3. the project in the current BB route/composer;
 4. BB's persisted root-compose project selection.
+5. when a browser route has no project context, the BB server probes the
+   available project sources and selects the only project where `bd list`
+   succeeds.
+
+The last fallback keeps remote browser clients independent of their own
+localStorage. If more than one BB project contains Beads, choose the project
+explicitly in the Beads settings; the plugin will not guess between unrelated
+repositories.
 
 For a project-backed selection, the plugin keeps the project source's
 `hostId` and runs `bd` on that host with the source path as its working
@@ -162,8 +170,8 @@ be enrolled and connected to BB, and must have a working `bd` executable.
 The path override is useful for an arbitrary checkout and intentionally runs
 on BB's primary host (the override does not accept a host selector). Leave it
 empty when the checkout belongs to an enrolled non-primary host. If a remote
-panel is empty, verify that the BB project has a `local_path` source, its
-source host is connected, and `bd` is available on that host; then reload the
+panel reports that no Beads project was found, verify that the BB project has a
+`local_path` source and that `bd` is available on that host; then reload the
 plugin and refresh the panel. BB versions without the host-command transport
 cannot safely execute a project sourced from another host; the plugin reports
 that the BB server must be updated or restarted instead of silently running
