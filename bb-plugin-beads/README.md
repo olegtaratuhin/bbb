@@ -17,6 +17,10 @@ project. It provides:
 - editing title, description, and acceptance criteria;
 - creating a new issue with type, priority, and description;
 - explicit refresh after changes.
+- a project selector containing every BB project, including projects that do
+  not have Beads yet;
+- a confirmed, host-routed setup flow that runs `bd init` in a selected
+  project when its local Beads workspace is missing.
 
 ## Query Language
 
@@ -154,12 +158,15 @@ is:
 4. BB's persisted root-compose project selection.
 5. when a browser route has no project context, the BB server probes the
    available project sources and selects the only project where `bd list`
-   succeeds.
+   succeeds; if no project has Beads yet, it opens the current BB project so
+   the panel can offer setup.
 
 The last fallback keeps remote browser clients independent of their own
-localStorage. If more than one BB project contains Beads, choose the project
-explicitly in the Beads settings; the plugin will not guess between unrelated
-repositories.
+localStorage. The project selector lists all BB projects. Projects without a
+usable local source are shown as unavailable; projects with a local source but
+no `.beads/` directory offer setup. Setup is never performed just by selecting
+a project: the user confirms it and the plugin runs `bd init` on the project's
+own host with non-interactive, idempotent flags.
 
 For a project-backed selection, the plugin keeps the project source's
 `hostId` and runs `bd` on that host with the source path as its working
