@@ -5,6 +5,7 @@ import {
   listIssuesArgs,
   normalizeIssues,
   queryIssuesArgs,
+  runBd,
   runBdJson,
   showIssueArgs,
   updateIssueArgs,
@@ -44,6 +45,9 @@ const issueIdInput = projectInput.extend({ id: z.string().min(1) });
 const beadsProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
+  hasBeads: z.boolean(),
+  canInitialize: z.boolean(),
+  sourceAvailable: z.boolean(),
 });
 
 const issueOutput = z.object({ issue: issueSchema });
@@ -52,6 +56,10 @@ export const rpcContract = defineRpcContract({
   listProjects: {
     input: z.object({}),
     output: z.object({ projects: z.array(beadsProjectSchema) }),
+  },
+  initializeProject: {
+    input: z.object({ projectId: z.string().min(1) }),
+    output: z.object({ initialized: z.literal(true) }),
   },
   listIssues: {
     input: projectInput.extend({
@@ -100,7 +108,14 @@ type HostExecute = NonNullable<Parameters<typeof runBdJson>[1]>["execute"];
 interface ProjectLike {
   id: string;
   name?: string | null;
-  sources: readonly ProjectSourceLike[];
+  sources?: readonly ProjectSourceLike[];
+}
+
+interface ProjectInspection {
+  project: ProjectLike;
+  hasBeads: boolean;
+  canInitialize: boolean;
+  sourceAvailable: boolean;
 }
 
 function errorMessage(result: { kind: string; message?: string; stderr?: string; error?: string }) {
@@ -206,12 +221,28 @@ async function runBdAtTarget(
   });
 }
 
+async function runRawBdAtTarget(
+  bb: BbPluginApi,
+  target: { path: string; hostId?: string },
+  args: readonly string[],
+) {
+  const execute = hostExecutor(bb);
+  await assertHostRouting(bb, target, execute);
+  return runBd(args, {
+    cwd: target.path,
+    ...(typeof execute === "function" && target.hostId !== undefined
+      ? { hostId: target.hostId }
+      : {}),
+    ...(typeof execute === "function" ? { execute } : {}),
+  });
+}
+
 async function projectTarget(
   bb: BbPluginApi,
   project: ProjectLike,
 ): Promise<{ path: string; hostId?: string } | null> {
   try {
-    const source = selectLocalWorkspaceSource(project.sources);
+    const source = selectLocalWorkspaceSource(project.sources ?? []);
     return {
       path: source.path!.trim(),
       ...(source.hostId !== undefined ? { hostId: source.hostId } : {}),
@@ -247,20 +278,75 @@ async function discoverBeadsProject(
 }
 
 async function findBeadsProjects(bb: BbPluginApi): Promise<ProjectLike[]> {
-  const projects = (await bb.sdk.projects.list()) as readonly ProjectLike[];
-  const matches: ProjectLike[] = [];
+  const inspections = await inspectProjects(bb);
+  return inspections
+    .filter((inspection) => inspection.hasBeads)
+    .map((inspection) => inspection.project);
+}
 
-  for (const project of projects) {
-    const target = await projectTarget(bb, project);
-    if (!target) continue;
-    const result = await runBdAtTarget(
-      bb,
-      target,
-      ["list", "--all", "--flat", "--limit", "1"],
+async function inspectProjects(bb: BbPluginApi): Promise<ProjectInspection[]> {
+  const projects = (await bb.sdk.projects.list({
+    includePersonal: true,
+  })) as readonly ProjectLike[];
+
+  return Promise.all(
+    projects.map(async (project): Promise<ProjectInspection> => {
+      const target = await projectTarget(bb, project);
+      if (!target) {
+        return {
+          project,
+          hasBeads: false,
+          canInitialize: false,
+          sourceAvailable: false,
+        };
+      }
+
+      let result: Awaited<ReturnType<typeof runBdAtTarget>>;
+      try {
+        result = await runBdAtTarget(
+          bb,
+          target,
+          ["list", "--all", "--flat", "--limit", "1"],
+        );
+      } catch {
+        return {
+          project,
+          hasBeads: false,
+          canInitialize: false,
+          sourceAvailable: true,
+        };
+      }
+      if (result.ok) {
+        return {
+          project,
+          hasBeads: true,
+          canInitialize: false,
+          sourceAvailable: true,
+        };
+      }
+
+      return {
+        project,
+        hasBeads: false,
+        canInitialize: isMissingBeadsDatabase(result),
+        sourceAvailable: true,
+      };
+    }),
+  );
+}
+
+async function selectedProjectTarget(
+  bb: BbPluginApi,
+  projectId: string,
+): Promise<{ path: string; hostId?: string }> {
+  const project = (await bb.sdk.projects.get({ projectId })) as ProjectLike;
+  const target = await projectTarget(bb, project);
+  if (!target) {
+    throw new Error(
+      "The selected BB project has no local workspace where Beads can be initialized.",
     );
-    if (result.ok) matches.push(project);
   }
-  return matches;
+  return target;
 }
 
 async function runProjectBd(
@@ -322,13 +408,46 @@ export default async function plugin(bb: BbPluginApi) {
 
   bb.rpc.register(rpcContract, {
     async listProjects() {
-      const projects = await findBeadsProjects(bb);
+      const projects = await inspectProjects(bb);
       return {
-        projects: projects.map((project) => ({
+        projects: projects.map(({ project, hasBeads, canInitialize, sourceAvailable }) => ({
           id: project.id,
           name: project.name?.trim() || project.id,
+          hasBeads,
+          canInitialize,
+          sourceAvailable,
         })),
       };
+    },
+    async initializeProject({ projectId }) {
+      const configured = await settings.get();
+      if (configured.workspacePath?.trim()) {
+        throw new Error(
+          "Clear the workspace path override before initializing Beads in a BB project.",
+        );
+      }
+      if (configured.projectId?.trim() && configured.projectId.trim() !== projectId) {
+        throw new Error(
+          "The configured project override must be cleared before initializing another BB project.",
+        );
+      }
+
+      const target = await selectedProjectTarget(bb, projectId);
+      const result = await runRawBdAtTarget(
+        bb,
+        target,
+        [
+          "init",
+          "--non-interactive",
+          "--init-if-missing",
+          "--skip-agents",
+          "--skip-hooks",
+        ],
+      );
+      if (!result.ok) {
+        throw new Error(errorMessage(result));
+      }
+      return { initialized: true as const };
     },
     async listIssues({ projectId, status, priority, query }) {
       const value = await runProjectBd(

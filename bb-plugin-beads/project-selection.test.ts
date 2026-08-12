@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { chooseDefaultBeadsProject } from "./project-selection";
 
-const projects = [{ id: "project-a" }, { id: "project-b" }];
+const projects = [
+  { id: "project-a", hasBeads: true },
+  { id: "project-b", hasBeads: true },
+];
 
 describe("chooseDefaultBeadsProject", () => {
   it("prefers the currently open Beads-backed project", () => {
@@ -36,5 +39,28 @@ describe("chooseDefaultBeadsProject", () => {
         threads: [{ projectId: "ordinary-project", updatedAt: 50, isArchived: false }],
       }),
     ).toBe("project-a");
+  });
+
+  it("ignores projects that still need Beads setup", () => {
+    expect(
+      chooseDefaultBeadsProject({
+        currentProjectId: "ordinary-project",
+        projects: [
+          { id: "ordinary-project", hasBeads: false },
+          { id: "project-a", hasBeads: true },
+        ],
+        threads: [],
+      }),
+    ).toBe("project-a");
+  });
+
+  it("opens the current project when no project has Beads yet", () => {
+    expect(
+      chooseDefaultBeadsProject({
+        currentProjectId: "ordinary-project",
+        projects: [{ id: "ordinary-project", hasBeads: false }],
+        threads: [],
+      }),
+    ).toBe("ordinary-project");
   });
 });

@@ -57,6 +57,9 @@ export type BdErr =
     }
   | { ok: false; kind: "parse"; raw: string; error: string };
 
+export type BdCommandOk = { ok: true; stdout: string; stderr: string };
+export type BdCommandResult = BdCommandOk | BdErr;
+
 export type BdResult<T = unknown> = BdOk<T> | BdErr;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -134,7 +137,7 @@ function parseBdOutput(stdout: string, stderr: string): BdResult {
   }
 }
 
-function resultFromHostExecution(result: BdExecutionResult): BdResult {
+function errorFromHostExecution(result: BdExecutionResult): BdErr | null {
   if (result.status === "spawn_error") {
     return {
       ok: false,
@@ -163,17 +166,18 @@ function resultFromHostExecution(result: BdExecutionResult): BdResult {
       stderr: result.stderr,
     };
   }
-  return parseBdOutput(result.stdout, result.stderr);
+  return null;
 }
 
 /**
- * Invoke the bd CLI and return parsed JSON on success,
- * or a structured error on failure.
+ * Invoke bd and return its successful raw output. This is used for commands
+ * such as `bd init` whose human-readable success output is not JSON even when
+ * the global --json flag is present.
  */
-export function runBdJson(
+export function runBd(
   commandArgs: readonly string[],
   options?: RunBdOptions,
-): Promise<BdResult> {
+): Promise<BdCommandResult> {
   return new Promise((resolve) => {
     const args = buildBdArgs(commandArgs);
     const cwd = getCwd(options);
@@ -190,7 +194,12 @@ export function runBdJson(
           ? { timeoutMs: options.timeoutMs }
           : {}),
       })
-        .then((result) => resolve(resultFromHostExecution(result)))
+        .then((result) => {
+          const error = errorFromHostExecution(result);
+          resolve(
+            error ?? { ok: true, stdout: result.stdout, stderr: result.stderr },
+          );
+        })
         .catch((err) =>
           resolve({
             ok: false,
@@ -232,20 +241,26 @@ export function runBdJson(
     child.on("close", (code) => {
       const stdout = Buffer.concat(stdoutParts).toString("utf8");
       const stderr = Buffer.concat(stderrParts).toString("utf8");
-
       if (code !== 0) {
-        resolve({
-          ok: false,
-          kind: "exit",
-          code: code ?? -1,
-          stdout,
-          stderr,
-        });
+        resolve({ ok: false, kind: "exit", code: code ?? -1, stdout, stderr });
         return;
       }
-
-      resolve(parseBdOutput(stdout, stderr));
+      resolve({ ok: true, stdout, stderr });
     });
+  });
+}
+
+/**
+ * Invoke the bd CLI and return parsed JSON on success,
+ * or a structured error on failure.
+ */
+export function runBdJson(
+  commandArgs: readonly string[],
+  options?: RunBdOptions,
+): Promise<BdResult> {
+  return runBd(commandArgs, options).then((result) => {
+    if (!result.ok) return result;
+    return parseBdOutput(result.stdout, result.stderr);
   });
 }
 

@@ -1,5 +1,6 @@
 export interface BeadsProjectReference {
   id: string;
+  hasBeads: boolean;
 }
 
 export interface BeadsThreadReference {
@@ -22,7 +23,8 @@ export function chooseDefaultBeadsProject({
   projects: readonly BeadsProjectReference[];
   threads: readonly BeadsThreadReference[];
 }): string | null {
-  const projectIds = new Set(projects.map((project) => project.id));
+  const beadsProjects = projects.filter((project) => project.hasBeads);
+  const projectIds = new Set(beadsProjects.map((project) => project.id));
   if (currentProjectId && projectIds.has(currentProjectId)) {
     return currentProjectId;
   }
@@ -30,5 +32,17 @@ export function chooseDefaultBeadsProject({
   const latestThreadProject = [...threads]
     .filter((thread) => !thread.isArchived && projectIds.has(thread.projectId))
     .sort((left, right) => right.updatedAt - left.updatedAt)[0];
-  return latestThreadProject?.projectId ?? projects[0]?.id ?? null;
+  if (latestThreadProject) return latestThreadProject.projectId;
+  if (beadsProjects[0]) return beadsProjects[0].id;
+
+  // If there is no initialized project yet, keep the panel useful by opening
+  // the current BB project so it can offer the setup flow in context.
+  const knownProjectIds = new Set(projects.map((project) => project.id));
+  if (currentProjectId && knownProjectIds.has(currentProjectId)) {
+    return currentProjectId;
+  }
+  const latestKnownThread = [...threads]
+    .filter((thread) => !thread.isArchived && knownProjectIds.has(thread.projectId))
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+  return latestKnownThread?.projectId ?? projects[0]?.id ?? null;
 }

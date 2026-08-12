@@ -106,8 +106,8 @@ describe("Beads server host routing", () => {
 
     await expect(registrations.handlers.listProjects({})).resolves.toEqual({
       projects: [
-        { id: "proj-one", name: "One" },
-        { id: "proj-two", name: "Two" },
+        { id: "proj-one", name: "One", hasBeads: true, canInitialize: false, sourceAvailable: true },
+        { id: "proj-two", name: "Two", hasBeads: true, canInitialize: false, sourceAvailable: true },
       ],
     });
   });
@@ -344,5 +344,121 @@ describe("Beads server host routing", () => {
     await expect(
       legacy.registrations.handlers.listIssues({ projectId: "proj-1" }),
     ).rejects.toThrow("does not support host-routed Beads commands");
+  });
+
+  it("listProjects includes a project with a local source that returns the missing-database error", async () => {
+    const execute = vi.fn(async (request: { cwd: string; args: readonly string[] }) => ({
+      status: "exited" as const,
+      exitCode: 1,
+      stdout: "",
+      stderr: "Error: no beads database found",
+      errorCode: null,
+      error: null,
+    }));
+    const { bb, registrations } = makeHost({
+      projects: [
+        {
+          id: "proj-empty",
+          name: "Empty project",
+          sources: [{ type: "local_path", path: "/empty/project", isDefault: true }],
+        },
+      ],
+      execute,
+    });
+    await plugin(bb);
+
+    await expect(registrations.handlers.listProjects({})).resolves.toEqual({
+      projects: [
+        {
+          id: "proj-empty",
+          name: "Empty project",
+          hasBeads: false,
+          canInitialize: true,
+          sourceAvailable: true,
+        },
+      ],
+    });
+  });
+
+  it("listProjects includes a project without a usable source", async () => {
+    const { bb, registrations } = makeHost({
+      projects: [
+        {
+          id: "proj-no-source",
+          name: "No source",
+          sources: [{ type: "git_remote", url: "https://example.com/repo.git" }],
+        },
+      ],
+      execute: vi.fn(async () => ({
+        status: "exited" as const,
+        exitCode: 0,
+        stdout: JSON.stringify([]),
+        stderr: "",
+        errorCode: null,
+        error: null,
+      })),
+    });
+    await plugin(bb);
+
+    await expect(registrations.handlers.listProjects({})).resolves.toEqual({
+      projects: [
+        {
+          id: "proj-no-source",
+          name: "No source",
+          hasBeads: false,
+          canInitialize: false,
+          sourceAvailable: false,
+        },
+      ],
+    });
+  });
+
+  it("initializeProject routes to the selected project host/cwd and passes the correct flags", async () => {
+    const requests: Array<{ hostId?: string; cwd: string; args: readonly string[] }> = [];
+    const execute = vi.fn(async (request: { hostId?: string; cwd: string; args: readonly string[] }) => {
+      requests.push(request);
+      return {
+        status: "exited" as const,
+        exitCode: 0,
+        stdout: "Beads initialized",
+        stderr: "",
+        errorCode: null,
+        error: null,
+      };
+    });
+    const { bb, registrations } = makeHost({
+      projects: [
+        {
+          id: "proj-init",
+          name: "Init project",
+          sources: [
+            { type: "local_path", path: "/init/project", hostId: "host-init", isDefault: true },
+          ],
+        },
+      ],
+      execute,
+    });
+    await plugin(bb);
+
+    await expect(
+      registrations.handlers.initializeProject({ projectId: "proj-init" }),
+    ).resolves.toEqual({ initialized: true });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      hostId: "host-init",
+      cwd: "/init/project",
+    });
+    // Global flags (--json, --sandbox) are prepended by buildBdArgs,
+    // followed by the init-specific flags
+    expect(requests[0]?.args).toEqual([
+      "--json",
+      "--sandbox",
+      "init",
+      "--non-interactive",
+      "--init-if-missing",
+      "--skip-agents",
+      "--skip-hooks",
+    ]);
   });
 });

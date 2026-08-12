@@ -7,6 +7,7 @@ import {
   showIssueArgs,
   createIssueArgs,
   updateIssueArgs,
+  runBd,
   runBdJson,
   type Issue,
   type BdResult,
@@ -427,6 +428,29 @@ describe("updateIssueArgs", () => {
 // ── runBdJson ────────────────────────────────────────────────────────────────
 
 describe("runBdJson", () => {
+  it("accepts successful non-JSON output for setup commands", async () => {
+    const execute = vi.fn(async () => ({
+      status: "exited" as const,
+      exitCode: 0,
+      stdout: "Beads initialized successfully!",
+      stderr: "",
+      errorCode: null,
+      error: null,
+    }));
+
+    await expect(
+      runBd(["init", "--non-interactive"], {
+        cwd: "/workspace",
+        hostId: "host-remote",
+        execute,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      stdout: "Beads initialized successfully!",
+      stderr: "",
+    });
+  });
+
   it("forwards argv, cwd, and host to the injected host executor", async () => {
     const execute = vi.fn(async (request: {
       hostId?: string;

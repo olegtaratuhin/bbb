@@ -101,6 +101,9 @@ type ViewMode = "kanban" | "list" | "graph" | "epics";
 type BeadsProjectOption = {
   id: string;
   name: string;
+  hasBeads: boolean;
+  canInitialize: boolean;
+  sourceAvailable: boolean;
 };
 
 const STATUS_CONFIG: Record<
@@ -1531,6 +1534,82 @@ function ErrorCard({ message }: { message: string }) {
   );
 }
 
+function BeadsSetupCard({
+  project,
+  initializing,
+  error,
+  onInitialize,
+}: {
+  project: BeadsProjectOption;
+  initializing: boolean;
+  error: string | null;
+  onInitialize: () => Promise<void>;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  if (!project.sourceAvailable || !project.canInitialize) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Beads is unavailable here</CardTitle>
+          <CardDescription>
+            {project.name} does not have a usable local repository source on a
+            connected BB host, so this project cannot be inspected or initialized
+            from this view.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Set up Beads in {project.name}</CardTitle>
+        <CardDescription>
+          This project does not have a Beads workspace yet. Set it up to create
+          a local <code>.beads/</code> directory in the repository and start
+          tracking issues with bd.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-center gap-3 pt-0">
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <Button type="button" onClick={() => setConfirmOpen(true)} disabled={initializing}>
+            <Icon name="Plus" className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            {initializing ? "Setting up…" : "Set up Beads"}
+          </Button>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Set up Beads in {project.name}?</DialogTitle>
+              <DialogDescription>
+                BB will run <code>bd init</code> on the host that owns this
+                repository. It will create the local Beads database and skip
+                agent instructions and git hooks.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button
+                type="button"
+                disabled={initializing}
+                onClick={() => {
+                  setConfirmOpen(false);
+                  void onInitialize();
+                }}
+              >
+                Initialize Beads
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {error ? <span className="text-sm text-destructive">{error}</span> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function CreateIssueDialog({
   open,
   onOpenChange,
@@ -1954,6 +2033,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [epicRailOpen, setEpicRailOpen] = useState(false);
   const [beadsProjects, setBeadsProjects] = useState<BeadsProjectOption[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsRefresh, setProjectsRefresh] = useState(0);
+  const [initializingProject, setInitializingProject] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
@@ -1989,6 +2070,11 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     : configuredProjectId ?? selectedProjectId ?? automaticProjectId;
   const projectSelectionLocked = Boolean(configuredProjectId || workspacePathOverride);
   const projectResolutionReady = Boolean(workspacePathOverride) || !projectsLoading;
+  const activeProject = useMemo(
+    () => beadsProjects.find((project) => project.id === activeProjectId) ?? null,
+    [activeProjectId, beadsProjects],
+  );
+  const activeProjectNeedsSetup = Boolean(activeProject && !activeProject.hasBeads);
 
   useEffect(() => {
     let cancelled = false;
@@ -2014,7 +2100,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     return () => {
       cancelled = true;
     };
-  }, [workspacePathOverride]);
+  }, [projectsRefresh, workspacePathOverride]);
 
   useEffect(() => {
     setSelectedProjectId(null);
@@ -2051,6 +2137,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   async function loadIssues() {
     const generation = ++listRequestGeneration.current;
+    if (activeProjectNeedsSetup) {
+      setIssues([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     if (queryMode && queryDiagnostics.length > 0) {
       setIssues([]);
       setError(null);
@@ -2075,6 +2167,10 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   async function loadDetail() {
+    if (activeProjectNeedsSetup) {
+      setDetail(null);
+      return;
+    }
     if (!selectedId) {
       setDetail(null);
       return;
@@ -2106,12 +2202,20 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     effectiveRpcProjectId,
     projectResolutionReady,
     workspacePathOverride,
+    activeProjectNeedsSetup,
   ]);
 
   useEffect(() => {
     if (!projectResolutionReady) return;
     void loadDetail();
-  }, [effectiveRpcProjectId, projectResolutionReady, selectedId, refresh, workspacePathOverride]);
+  }, [
+    activeProjectNeedsSetup,
+    effectiveRpcProjectId,
+    projectResolutionReady,
+    selectedId,
+    refresh,
+    workspacePathOverride,
+  ]);
 
   const selectedEpic = useMemo(
     () =>
@@ -2220,6 +2324,24 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     setGraphFocusId(null);
     if (selectedId) {
       navigate.toPluginPanel("board", { subPath: "", replace: true });
+    }
+  }
+
+  async function initializeSelectedProject() {
+    if (!activeProject || !activeProject.canInitialize || projectSelectionLocked) {
+      return;
+    }
+    setInitializingProject(true);
+    setError(null);
+    try {
+      await rpc.call("initializeProject", { projectId: activeProject.id });
+      setSelectedProjectId(activeProject.id);
+      setProjectsRefresh((value) => value + 1);
+      setRefresh((value) => value + 1);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to initialize Beads");
+    } finally {
+      setInitializingProject(false);
     }
   }
 
@@ -2332,11 +2454,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 ) : projectsLoading ? (
                   <option value="">Finding projects…</option>
                 ) : beadsProjects.length === 0 ? (
-                  <option value="">No Beads projects</option>
+                  <option value="">No BB projects</option>
                 ) : (
                   beadsProjects.map((project) => (
                     <option key={project.id} value={project.id}>
                       {project.name}
+                      {!project.hasBeads
+                        ? project.canInitialize
+                          ? " · Set up Beads"
+                          : " · Unavailable"
+                        : ""}
                     </option>
                   ))
                 )}
@@ -2553,7 +2680,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               ))}
             </FilterChip>
           </div>
-          {error ? (
+          {error && !activeProjectNeedsSetup ? (
             <div className="mt-3">
               <ErrorCard message={error} />
             </div>
@@ -2565,7 +2692,14 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto p-4">
           <div className="w-full">
-            {viewMode === "epics" ? (
+            {activeProjectNeedsSetup && activeProject ? (
+              <BeadsSetupCard
+                project={activeProject}
+                initializing={initializingProject}
+                error={error}
+                onInitialize={initializeSelectedProject}
+              />
+            ) : viewMode === "epics" ? (
               <EpicWorkspace
                 issues={issues}
                 visibleIssues={visibleIssues}

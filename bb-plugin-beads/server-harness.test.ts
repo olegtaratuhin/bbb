@@ -55,6 +55,7 @@ describe("Beads server harness", () => {
 
     expect(host.harness.registrations.rpcMethods).toEqual([
       "listProjects",
+      "initializeProject",
       "listIssues",
       "showIssue",
       "createIssue",

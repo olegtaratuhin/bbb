@@ -57,10 +57,12 @@ export interface CreateFakePluginHostOptions {
   }>;
   /** Default workspace path returned by settings.get(). */
   workspacePath?: string;
-  /** Project sources returned by bb.sdk.projects.get(). */
+  /** Project sources returned by bb.sdk.projects.get() when no projectId is given. */
   projectSources?: Array<Record<string, unknown>>;
   /** Primary host id returned by bb.sdk.system.config(). */
   primaryHostId?: string | null;
+  /** Projects returned by bb.sdk.projects.list({includePersonal:true}). */
+  projects?: Array<Record<string, unknown>>;
 }
 
 export function createFakePluginHost(options: CreateFakePluginHostOptions = {}) {
@@ -147,15 +149,28 @@ export function createFakePluginHost(options: CreateFakePluginHostOptions = {}) 
     },
     sdk: {
       projects: {
-        get: async () => {
+        get: async ({ projectId }: { projectId?: string } = {}) => {
           checkDisposed();
+          // If a projectId is provided and we have a projects list, return the matching project
+          if (projectId && sdkOverrides.projects) {
+            const project = sdkOverrides.projects.find(
+              (p: Record<string, unknown>) => String(p.id) === projectId,
+            );
+            if (project) {
+              return project;
+            }
+          }
+          // Fallback: return the legacy single-project shape with projectSources
           return {
             id: "proj-test",
             name: "Test project",
             sources: sdkOverrides.projectSources ?? [],
           };
         },
-        list: async () => [],
+        list: async () => {
+          checkDisposed();
+          return sdkOverrides.projects ?? [];
+        },
       },
       system: {
         config: async () => {
