@@ -1,10 +1,12 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { type CompletionItem, type HighlightSpan } from "./query-core";
 import { applyCompletion, createQueryEditorModel } from "./query-editor-model";
 import { Input } from "./components/ui/input";
@@ -31,9 +33,15 @@ export function QueryInput({
   onChange: (value: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputFrameRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   const [cursor, setCursor] = useState(value.length);
   const [activeSuggestion, setActiveSuggestion] = useState(0);
+  const [completionPosition, setCompletionPosition] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
   const editorModel = useMemo(
     () => createQueryEditorModel(value, cursor),
     [cursor, value],
@@ -46,6 +54,34 @@ export function QueryInput({
   useEffect(() => {
     setActiveSuggestion(0);
   }, [value, cursor]);
+
+  useLayoutEffect(() => {
+    if (!focused || suggestions.length === 0) {
+      setCompletionPosition(null);
+      return;
+    }
+
+    const frame = inputFrameRef.current;
+    if (!frame) return;
+    const frameElement: HTMLDivElement = frame;
+
+    function updateCompletionPosition() {
+      const rect = frameElement.getBoundingClientRect();
+      setCompletionPosition({
+        left: rect.left,
+        top: rect.bottom + 4,
+        width: rect.width,
+      });
+    }
+
+    updateCompletionPosition();
+    window.addEventListener("resize", updateCompletionPosition);
+    window.addEventListener("scroll", updateCompletionPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateCompletionPosition);
+      window.removeEventListener("scroll", updateCompletionPosition, true);
+    };
+  }, [focused, suggestions.length]);
 
   function updateCursor() {
     setCursor(inputRef.current?.selectionStart ?? value.length);
@@ -82,7 +118,7 @@ export function QueryInput({
 
   return (
     <div className="relative min-w-0 flex-1">
-      <div className="relative h-8">
+      <div ref={inputFrameRef} className="relative h-8">
         {queryMode ? (
           <div
             aria-hidden="true"
@@ -146,33 +182,41 @@ export function QueryInput({
             }}
           />
         </div>
-        {focused && suggestions.length > 0 ? (
-          <div
-            role="listbox"
-            aria-label="Beads query completions"
-            aria-orientation="vertical"
-            id="beads-query-completions"
-            data-testid="beads-query-completion-surface"
-            className="absolute left-0 right-0 top-full z-30 mt-1 grid max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md [scrollbar-width:thin] max-md:pointer-coarse:fixed max-md:pointer-coarse:inset-x-3 max-md:pointer-coarse:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:pointer-coarse:top-auto max-md:pointer-coarse:max-h-[min(20rem,45dvh)] max-md:pointer-coarse:rounded-xl max-md:pointer-coarse:p-2 max-md:pointer-coarse:text-base max-md:pointer-coarse:shadow-lg"
-          >
-            {suggestions.map((item) => (
-              <button
-                key={`${item.kind}-${item.label}`}
-                id={`beads-query-completion-${item.kind}-${item.label}`}
-                type="button"
-                role="option"
-                aria-selected={suggestions[activeSuggestion] === item}
-                className={`flex min-h-11 items-center justify-between gap-3 rounded px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground max-md:pointer-coarse:min-h-12 max-md:pointer-coarse:px-3.5 max-md:pointer-coarse:py-2.5 ${suggestions[activeSuggestion] === item ? "bg-accent text-accent-foreground" : ""}`}
-                onPointerDown={(event) => event.preventDefault()}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => acceptSuggestion(item)}
+        {focused && suggestions.length > 0 && completionPosition && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                role="listbox"
+                aria-label="Beads query completions"
+                aria-orientation="vertical"
+                id="beads-query-completions"
+                data-testid="beads-query-completion-surface"
+                style={{
+                  "--beads-query-completion-left": `${completionPosition.left}px`,
+                  "--beads-query-completion-top": `${completionPosition.top}px`,
+                  "--beads-query-completion-width": `${completionPosition.width}px`,
+                } as React.CSSProperties}
+                className="fixed left-[var(--beads-query-completion-left)] top-[var(--beads-query-completion-top)] z-30 mt-0 grid w-[var(--beads-query-completion-width)] max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md [scrollbar-width:thin] max-md:pointer-coarse:inset-x-3 max-md:pointer-coarse:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:pointer-coarse:top-auto max-md:pointer-coarse:w-auto max-md:pointer-coarse:max-h-[min(20rem,45dvh)] max-md:pointer-coarse:rounded-xl max-md:pointer-coarse:p-2 max-md:pointer-coarse:text-base max-md:pointer-coarse:shadow-lg"
               >
-                <span>{item.label}</span>
-                {item.detail ? <span className="text-muted-foreground">{item.detail}</span> : null}
-              </button>
-            ))}
-          </div>
-        ) : null}
+                {suggestions.map((item) => (
+                  <button
+                    key={`${item.kind}-${item.label}`}
+                    id={`beads-query-completion-${item.kind}-${item.label}`}
+                    type="button"
+                    role="option"
+                    aria-selected={suggestions[activeSuggestion] === item}
+                    className={`flex min-h-11 items-center justify-between gap-3 rounded px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground max-md:pointer-coarse:min-h-12 max-md:pointer-coarse:px-3.5 max-md:pointer-coarse:py-2.5 ${suggestions[activeSuggestion] === item ? "bg-accent text-accent-foreground" : ""}`}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => acceptSuggestion(item)}
+                  >
+                    <span>{item.label}</span>
+                    {item.detail ? <span className="text-muted-foreground">{item.detail}</span> : null}
+                  </button>
+                ))}
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
       {diagnostics.length > 0 ? (
         <div id="beads-query-diagnostics" className="mt-1 truncate text-[11px] text-destructive" role="alert">
