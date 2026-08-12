@@ -22,6 +22,30 @@ project. It provides:
 - a confirmed, host-routed setup flow that runs `bd init` in a selected
   project when its local Beads workspace is missing.
 
+### Responsive layout contract
+
+The panel uses container breakpoints, because its usable width depends on BB's
+sidebars and drawers rather than the browser viewport:
+
+- **Wide (roughly 960px and above):** project, scope, view, and actions share
+  one compact primary row. Search, filters, issue count, and sort are on a
+  stable secondary row.
+- **Medium (roughly 640–959px):** the primary row may wrap naturally and action
+  labels become icon-only where appropriate. The secondary row wraps; it does
+  not hide required controls inside an unmarked horizontal scroller.
+- **Narrow (below roughly 640px; the Tasks-style `@md` micro-breakpoint is
+  about 448px):** controls stack into reachable rows. Project and scope
+  selectors retain bounded widths, while search, filters, count, and sort remain
+  individually reachable. The board canvas may scroll horizontally, but the
+  toolbar itself does not clip actions.
+
+Issue count and sort stay outside the filter group at every width so they do
+not disappear when the available space is tight. Loading placeholders use the
+active view's shape (Kanban, list, graph, or epics), and cached results remain
+visible while stale data is refreshed. The project catalog and issue results
+are module-scoped stale-while-revalidate caches, so an internal BB resize or
+panel remount does not reset the selected project or blank the board.
+
 ## Query Language
 
 The search input supports two modes:

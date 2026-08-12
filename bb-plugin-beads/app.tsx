@@ -20,6 +20,22 @@ import type { rpcContract } from "./server";
 import type { Issue } from "./bd-client";
 import { QueryInput } from "./query-input";
 import {
+  invalidateProjectCatalog,
+  loadProjectCatalog,
+  readProjectCatalog,
+  type BeadsProjectOption,
+} from "./project-catalog";
+import {
+  hasFreshCachedIssues,
+  invalidateIssueCache,
+  makeIssueCacheKey,
+  readCachedIssues,
+  writeCachedIssues,
+} from "./issue-cache";
+import { IssueViewSkeleton } from "./loading-skeleton";
+import { BeadsToolbarFrame } from "./responsive-toolbar";
+import type { ViewMode } from "./view-mode";
+import {
   describeQueryExecution,
   QUERY_EXECUTION_DEBOUNCE_MS,
 } from "./query-execution";
@@ -97,16 +113,6 @@ type EpicSortMode =
   | "issues_desc"
   | "updated_desc"
   | "title_asc";
-
-type ViewMode = "kanban" | "list" | "graph" | "epics";
-
-type BeadsProjectOption = {
-  id: string;
-  name: string;
-  hasBeads: boolean;
-  canInitialize: boolean;
-  sourceAvailable: boolean;
-};
 
 const STATUS_CONFIG: Record<
   IssueStatus,
@@ -1492,11 +1498,7 @@ function EpicWorkspace({
               </span>
             </div>
             {loading && visibleIssues.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                  Loading issues…
-                </CardContent>
-              </Card>
+              <IssueViewSkeleton viewMode="list" />
             ) : visibleIssues.length === 0 ? (
               <Card>
                 <CardContent className="p-6 text-center text-sm text-muted-foreground">
@@ -1508,11 +1510,7 @@ function EpicWorkspace({
             )}
           </>
         ) : loading && issues.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center text-sm text-muted-foreground">
-              Loading epics…
-            </CardContent>
-          </Card>
+          <IssueViewSkeleton viewMode="epics" />
         ) : (
           <EpicProgressView
             issues={issues}
@@ -1617,6 +1615,7 @@ function CreateIssueDialog({
   onOpenChange,
   onCreate,
   initialType = "task",
+  compact = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -1627,6 +1626,7 @@ function CreateIssueDialog({
     priority: number;
     description?: string;
   }) => Promise<void>;
+  compact?: boolean;
 }) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState("task");
@@ -1664,9 +1664,9 @@ function CreateIssueDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button size="sm" aria-label="New task">
           <Icon name="Plus" className="h-4 w-4" aria-hidden="true" />
-          New task
+          <span className={compact ? "hidden @lg:inline" : undefined}>New task</span>
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -2076,6 +2076,9 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     : configuredProjectId ?? selectedProjectId ?? automaticProjectId;
   const projectSelectionLocked = Boolean(configuredProjectId || workspacePathOverride);
   const projectResolutionReady = Boolean(workspacePathOverride) || !projectsLoading;
+  const projectCatalogKey = workspacePathOverride
+    ? `workspace:${workspacePathOverride}`
+    : "bb-projects";
   const activeProject = useMemo(
     () => beadsProjects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, beadsProjects],
@@ -2089,24 +2092,33 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       setProjectsLoading(false);
       return;
     }
-    setProjectsLoading(true);
-    void rpc.call("listProjects", {}).then(
+    const cachedProjects = readProjectCatalog(projectCatalogKey);
+    if (cachedProjects) {
+      setBeadsProjects(cachedProjects);
+      setProjectsLoading(false);
+    } else {
+      setProjectsLoading(true);
+    }
+    void loadProjectCatalog(
+      projectCatalogKey,
+      async () => (await rpc.call("listProjects", {})).projects as BeadsProjectOption[],
+    ).then(
       (result) => {
         if (cancelled) return;
-        setBeadsProjects(result.projects as BeadsProjectOption[]);
+        setBeadsProjects(result);
         setProjectsLoading(false);
       },
       (cause) => {
         if (cancelled) return;
-        setBeadsProjects([]);
-        setProjectsLoading(false);
+        if (cachedProjects) setBeadsProjects(cachedProjects);
+        setProjectsLoading(cachedProjects === null);
         setError(cause instanceof Error ? cause.message : "Unable to discover Beads projects");
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [projectsRefresh, workspacePathOverride]);
+  }, [projectCatalogKey, projectsRefresh, workspacePathOverride]);
 
   useEffect(() => {
     if (projectsLoading) return;
@@ -2129,6 +2141,15 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const queryMode = queryExecution.mode === "query" || queryExecution.mode === "invalid";
   const queryDiagnostics = queryExecution.diagnostics;
   const beadsQuery = queryExecution.query;
+  const issueCacheKey = useMemo(
+    () =>
+      makeIssueCacheKey({
+        workspacePath: workspacePathOverride,
+        projectId: effectiveRpcProjectId,
+        query: beadsQuery,
+      }),
+    [beadsQuery, effectiveRpcProjectId, workspacePathOverride],
+  );
 
   useEffect(() => {
     const refreshRootProject = () => {
@@ -2156,7 +2177,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const cachedIssues = readCachedIssues(issueCacheKey);
+    if (cachedIssues) setIssues(cachedIssues);
+    if (cachedIssues && hasFreshCachedIssues(issueCacheKey)) {
+      setLoading(false);
+      return;
+    }
+    setLoading(cachedIssues === null);
     setError(null);
     try {
       const result = await rpc.call("listIssues", {
@@ -2165,6 +2192,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       });
       if (generation !== listRequestGeneration.current) return;
       setIssues(result.issues as Issue[]);
+      writeCachedIssues(issueCacheKey, result.issues as Issue[]);
     } catch (cause) {
       if (generation !== listRequestGeneration.current) return;
       setError(cause instanceof Error ? cause.message : "Unable to load Beads");
@@ -2194,6 +2222,22 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }
 
   useEffect(() => {
+    if (!projectResolutionReady || activeProjectNeedsSetup || queryDiagnostics.length > 0) {
+      return;
+    }
+    const cachedIssues = readCachedIssues(issueCacheKey);
+    if (cachedIssues) {
+      setIssues(cachedIssues);
+      setLoading(false);
+    }
+  }, [
+    activeProjectNeedsSetup,
+    issueCacheKey,
+    projectResolutionReady,
+    queryDiagnostics.length,
+  ]);
+
+  useEffect(() => {
     if (!projectResolutionReady) return;
     const delay = queryExecution.mode === "query"
       ? QUERY_EXECUTION_DEBOUNCE_MS
@@ -2210,6 +2254,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     projectResolutionReady,
     workspacePathOverride,
     activeProjectNeedsSetup,
+    issueCacheKey,
   ]);
 
   useEffect(() => {
@@ -2327,7 +2372,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
       typeof window === "undefined" ? undefined : window.localStorage,
       nextProjectId,
     );
-    setIssues([]);
     setDetail(null);
     setError(null);
     setEpicScopeId(null);
@@ -2336,6 +2380,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     if (selectedId) {
       navigate.toPluginPanel("board", { subPath: "", replace: true });
     }
+  }
+
+  function refreshPanel() {
+    invalidateProjectCatalog(projectCatalogKey);
+    invalidateIssueCache();
+    setProjectsRefresh((value) => value + 1);
+    setRefresh((value) => value + 1);
   }
 
   async function initializeSelectedProject() {
@@ -2347,6 +2398,8 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     try {
       await rpc.call("initializeProject", { projectId: activeProject.id });
       setSelectedProjectId(activeProject.id);
+      invalidateProjectCatalog(projectCatalogKey);
+      invalidateIssueCache();
       setProjectsRefresh((value) => value + 1);
       setRefresh((value) => value + 1);
     } catch (cause) {
@@ -2380,6 +2433,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
         ...(effectiveRpcProjectId ? { projectId: effectiveRpcProjectId } : {}),
         ...input,
       });
+      invalidateIssueCache();
       setRefresh((value) => value + 1);
       navigate.toPluginPanel("board", {
         subPath: `issue/${encodeURIComponent((result.issue as Issue).id)}`,
@@ -2407,6 +2461,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
         id: selectedId,
         ...input,
       });
+      invalidateIssueCache();
       setRefresh((value) => value + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to update issue");
@@ -2445,17 +2500,20 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   return (
     <div className="@container flex h-full flex-col">
       {/* Header */}
-      <div className="shrink-0 border-b border-border-hairline bg-background px-3.5 py-1.5">
+      <BeadsToolbarFrame>
         <div className="w-full">
-          <div className="flex min-w-0 items-center gap-2">
+          <div
+            data-testid="beads-toolbar-primary"
+            className="flex min-w-0 flex-wrap items-center gap-2"
+          >
             <div
-              className="relative flex min-w-0 max-w-48 shrink-0 overflow-hidden rounded-md border border-border"
+              className="relative flex w-48 min-w-0 max-w-48 flex-[1_1_12rem] overflow-hidden rounded-md border border-border"
               role="group"
               aria-label="Beads project"
             >
               <select
                 aria-label="Beads project"
-                className="h-8 min-w-0 max-w-48 appearance-none bg-transparent px-2 pr-7 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-8 w-full min-w-0 appearance-none bg-transparent px-2 pr-7 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 value={activeProjectId ?? ""}
                 disabled={projectSelectionLocked || projectsLoading || beadsProjects.length === 0}
                 onChange={(event) => selectProject(event.target.value)}
@@ -2486,7 +2544,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               />
             </div>
             <div
-              className="relative flex w-48 shrink-0 overflow-hidden rounded-md border border-border"
+              className="relative flex w-48 min-w-0 max-w-48 flex-[1_1_12rem] overflow-hidden rounded-md border border-border"
               role="group"
               aria-label="Issue scope"
             >
@@ -2567,22 +2625,23 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               </Button>
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
+              <CreateIssueDialog
+                open={createOpen}
+                onOpenChange={handleCreateOpenChange}
+                initialType={createType}
+                onCreate={createIssue}
+                compact
+              />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 aria-label="Refresh issues"
-                onClick={() => setRefresh((value) => value + 1)}
+                onClick={refreshPanel}
               >
                 <Icon name="RotateCcw" className="h-4 w-4" aria-hidden="true" />
               </Button>
-              <CreateIssueDialog
-                open={createOpen}
-                onOpenChange={handleCreateOpenChange}
-                initialType={createType}
-                onCreate={createIssue}
-              />
               <Button
                 type="button"
                 variant="ghost"
@@ -2596,9 +2655,12 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               </Button>
             </div>
           </div>
-          <div className="mt-1 flex min-w-0 items-center gap-1.5 border-t border-border-hairline pt-1">
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
-              <div className="flex min-w-[12rem] flex-1 @md:max-w-[28rem]">
+          <div
+            data-testid="beads-toolbar-secondary"
+            className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 border-t border-border-hairline pt-1"
+          >
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              <div className="flex min-w-48 flex-[1_1_18rem] @md:max-w-[28rem]">
                 <QueryInput value={query} onChange={setQuery} />
               </div>
               <FilterChip
@@ -2697,7 +2759,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             </div>
           ) : null}
         </div>
-      </div>
+      </BeadsToolbarFrame>
 
       {/* Content area */}
       <div className="flex min-h-0 flex-1">
@@ -2721,11 +2783,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
                 onOpenIssue={openIssue}
               />
             ) : loading && visibleIssues.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                  Loading issues…
-                </CardContent>
-              </Card>
+              <IssueViewSkeleton viewMode={viewMode} />
             ) : visibleIssues.length === 0 ? (
               <Card>
                 <CardContent className="p-6 text-center text-sm text-muted-foreground">
