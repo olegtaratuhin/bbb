@@ -82,96 +82,98 @@ export function QueryInput({
 
   return (
     <div className="relative min-w-0 flex-1">
-      {queryMode ? (
-        <div
-          aria-hidden="true"
-          data-testid="beads-query-highlight"
-          className="pointer-events-none absolute inset-0 z-[1] flex items-center overflow-hidden whitespace-pre px-3 py-1 text-sm"
-        >
-          {highlightedContent}
-        </div>
-      ) : null}
-      <Input
-        ref={inputRef}
-        aria-label="Search Beads issues"
-        aria-describedby={diagnostics.length > 0 ? "beads-query-diagnostics" : undefined}
-        aria-controls={focused && suggestions.length > 0 ? "beads-query-completions" : undefined}
-        aria-activedescendant={
-          focused && suggestions[activeSuggestion]
-            ? `beads-query-completion-${suggestions[activeSuggestion]!.kind}-${suggestions[activeSuggestion]!.label}`
-            : undefined
-        }
-        placeholder="Search issues or query"
-        value={value}
-        onFocus={() => {
-          setFocused(true);
-          setActiveSuggestion(0);
-          updateCursor();
-        }}
-        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
-        onClick={updateCursor}
-        onKeyUp={updateCursor}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" && suggestions.length > 0) {
-            event.preventDefault();
-            setActiveSuggestion((current) => Math.min(current + 1, suggestions.length - 1));
-          } else if (event.key === "ArrowUp" && suggestions.length > 0) {
-            event.preventDefault();
-            setActiveSuggestion((current) => Math.max(current - 1, 0));
-          } else if (event.key === "Enter" && suggestions[activeSuggestion]) {
-            event.preventDefault();
-            acceptSuggestion(suggestions[activeSuggestion]!);
-          } else if (event.key === "Escape") {
-            setFocused(false);
+      <div className="relative h-8">
+        {queryMode ? (
+          <div
+            aria-hidden="true"
+            data-testid="beads-query-highlight"
+            className="pointer-events-none absolute inset-x-px inset-y-px z-[1] flex items-center overflow-hidden whitespace-pre px-3 font-[inherit] text-sm leading-5"
+          >
+            {highlightedContent}
+          </div>
+        ) : null}
+        <Input
+          ref={inputRef}
+          aria-label="Search Beads issues"
+          aria-describedby={diagnostics.length > 0 ? "beads-query-diagnostics" : undefined}
+          aria-controls={focused && suggestions.length > 0 ? "beads-query-completions" : undefined}
+          aria-activedescendant={
+            focused && suggestions[activeSuggestion]
+              ? `beads-query-completion-${suggestions[activeSuggestion]!.kind}-${suggestions[activeSuggestion]!.label}`
+              : undefined
           }
-        }}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setCursor(event.target.selectionStart ?? event.target.value.length);
-        }}
-        className={`h-8 min-w-0 pr-10 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
-      />
-      <div className="absolute right-0.5 top-1/2 z-[3] -translate-y-1/2">
-        <QueryAssist
-          query={value}
-          onQueryChange={onChange}
-          onClosed={() => {
-            requestAnimationFrame(() => {
-              inputRef.current?.focus();
-              const nextCursor = inputRef.current?.value.length ?? value.length;
-              inputRef.current?.setSelectionRange(nextCursor, nextCursor);
-              setCursor(nextCursor);
-            });
+          placeholder="Search issues or query"
+          value={value}
+          onFocus={() => {
+            setFocused(true);
+            setActiveSuggestion(0);
+            updateCursor();
           }}
+          onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+          onClick={updateCursor}
+          onKeyUp={updateCursor}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" && suggestions.length > 0) {
+              event.preventDefault();
+              setActiveSuggestion((current) => Math.min(current + 1, suggestions.length - 1));
+            } else if (event.key === "ArrowUp" && suggestions.length > 0) {
+              event.preventDefault();
+              setActiveSuggestion((current) => Math.max(current - 1, 0));
+            } else if (event.key === "Enter" && suggestions[activeSuggestion]) {
+              event.preventDefault();
+              acceptSuggestion(suggestions[activeSuggestion]!);
+            } else if (event.key === "Escape") {
+              setFocused(false);
+            }
+          }}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setCursor(event.target.selectionStart ?? event.target.value.length);
+          }}
+          className={`h-8 min-w-0 pr-10 font-[inherit] text-sm leading-5 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
         />
-      </div>
-      {focused && suggestions.length > 0 ? (
-        <div
-          role="listbox"
-          aria-label="Beads query completions"
-          aria-orientation="vertical"
-          id="beads-query-completions"
-          data-testid="beads-query-completion-surface"
-          className="absolute left-0 right-0 top-9 z-30 grid max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md [scrollbar-width:thin] max-md:pointer-coarse:fixed max-md:pointer-coarse:inset-x-3 max-md:pointer-coarse:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:pointer-coarse:top-auto max-md:pointer-coarse:max-h-[min(20rem,45dvh)] max-md:pointer-coarse:rounded-xl max-md:pointer-coarse:p-2 max-md:pointer-coarse:text-base max-md:pointer-coarse:shadow-lg"
-        >
-          {suggestions.map((item) => (
-            <button
-              key={`${item.kind}-${item.label}`}
-              id={`beads-query-completion-${item.kind}-${item.label}`}
-              type="button"
-              role="option"
-              aria-selected={suggestions[activeSuggestion] === item}
-              className={`flex min-h-11 items-center justify-between gap-3 rounded px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground max-md:pointer-coarse:min-h-12 max-md:pointer-coarse:px-3.5 max-md:pointer-coarse:py-2.5 ${suggestions[activeSuggestion] === item ? "bg-accent text-accent-foreground" : ""}`}
-              onPointerDown={(event) => event.preventDefault()}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => acceptSuggestion(item)}
-            >
-              <span>{item.label}</span>
-              {item.detail ? <span className="text-muted-foreground">{item.detail}</span> : null}
-            </button>
-          ))}
+        <div className="absolute right-0.5 top-1/2 z-[3] -translate-y-1/2">
+          <QueryAssist
+            query={value}
+            onQueryChange={onChange}
+            onClosed={() => {
+              requestAnimationFrame(() => {
+                inputRef.current?.focus();
+                const nextCursor = inputRef.current?.value.length ?? value.length;
+                inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+                setCursor(nextCursor);
+              });
+            }}
+          />
         </div>
-      ) : null}
+        {focused && suggestions.length > 0 ? (
+          <div
+            role="listbox"
+            aria-label="Beads query completions"
+            aria-orientation="vertical"
+            id="beads-query-completions"
+            data-testid="beads-query-completion-surface"
+            className="absolute left-0 right-0 top-full z-30 mt-1 grid max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-md [scrollbar-width:thin] max-md:pointer-coarse:fixed max-md:pointer-coarse:inset-x-3 max-md:pointer-coarse:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:pointer-coarse:top-auto max-md:pointer-coarse:max-h-[min(20rem,45dvh)] max-md:pointer-coarse:rounded-xl max-md:pointer-coarse:p-2 max-md:pointer-coarse:text-base max-md:pointer-coarse:shadow-lg"
+          >
+            {suggestions.map((item) => (
+              <button
+                key={`${item.kind}-${item.label}`}
+                id={`beads-query-completion-${item.kind}-${item.label}`}
+                type="button"
+                role="option"
+                aria-selected={suggestions[activeSuggestion] === item}
+                className={`flex min-h-11 items-center justify-between gap-3 rounded px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground max-md:pointer-coarse:min-h-12 max-md:pointer-coarse:px-3.5 max-md:pointer-coarse:py-2.5 ${suggestions[activeSuggestion] === item ? "bg-accent text-accent-foreground" : ""}`}
+                onPointerDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => acceptSuggestion(item)}
+              >
+                <span>{item.label}</span>
+                {item.detail ? <span className="text-muted-foreground">{item.detail}</span> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
       {diagnostics.length > 0 ? (
         <div id="beads-query-diagnostics" className="mt-1 truncate text-[11px] text-destructive" role="alert">
           {diagnostics[0]?.message}

@@ -33,6 +33,25 @@ describe("QueryInput", () => {
     expect((input as HTMLInputElement).value).toBe("status=open");
   });
 
+  it("keeps query highlighting aligned with the input when value completion opens", () => {
+    renderInput("status=");
+    const input = screen.getByRole("textbox", { name: "Search Beads issues" });
+    fireEvent.focus(input);
+
+    const highlight = screen.getByTestId("beads-query-highlight");
+    const listbox = screen.getByRole("listbox", { name: "Beads query completions" });
+
+    expect(highlight.textContent).toBe("status=");
+    expect(highlight.className).toContain("inset-x-px");
+    expect(highlight.className).toContain("inset-y-px");
+    expect(highlight.className).toContain("font-[inherit]");
+    expect(input.className).toContain("font-[inherit]");
+    expect(input.className).toContain("leading-5");
+    expect(listbox.className).toContain("top-full");
+    expect(listbox.className).toContain("mt-1");
+    expect(listbox.parentElement).toBe(input.parentElement);
+  });
+
   it("supports keyboard navigation and completion acceptance", () => {
     renderInput("prio");
     const input = screen.getByRole("textbox", { name: "Search Beads issues" });
