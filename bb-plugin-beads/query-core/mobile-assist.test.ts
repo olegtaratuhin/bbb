@@ -618,8 +618,12 @@ describe("BUILT_IN_PRESETS", () => {
     expect(names).toContain("open-issues");
     expect(names).toContain("blocked-issues");
     expect(names).toContain("high-priority");
+    expect(names).toContain("priority-0");
+    expect(names).toContain("priority-4");
     expect(names).toContain("my-issues");
     expect(names).toContain("in-progress");
+    expect(names).toContain("deferred-issues");
+    expect(names).toContain("closed-issues");
     expect(names).toContain("unassigned");
     expect(names).toContain("recently-updated");
   });
@@ -638,6 +642,11 @@ describe("BUILT_IN_PRESETS", () => {
   it("serializes high-priority preset with OR connector", () => {
     const preset = getPreset("high-priority");
     expect(serializePreset(preset!, {})).toBe("priority=0 OR priority=1");
+  });
+
+  it("serializes individual priority presets", () => {
+    expect(serializePreset(getPreset("priority-0")!, {})).toBe("priority=0");
+    expect(serializePreset(getPreset("priority-4")!, {})).toBe("priority=4");
   });
 
   it("serializes my-issues preset with assignee", () => {
@@ -664,6 +673,11 @@ describe("BUILT_IN_PRESETS", () => {
   it("serializes in-progress preset", () => {
     const preset = getPreset("in-progress");
     expect(serializePreset(preset!, {})).toBe("status=in_progress");
+  });
+
+  it("serializes the remaining status presets", () => {
+    expect(serializePreset(getPreset("deferred-issues")!, {})).toBe("status=deferred");
+    expect(serializePreset(getPreset("closed-issues")!, {})).toBe("status=closed");
   });
 
   it("provides deterministic serialization", () => {

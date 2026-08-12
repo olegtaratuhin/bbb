@@ -45,6 +45,34 @@ interface QueryAssistProps {
 type ApplyMode = "replace" | "compose";
 type AssistTab = "presets" | "builder" | "examples";
 
+const QUICK_FILTER_GROUPS = [
+  {
+    label: "Status",
+    presetNames: [
+      "open-issues",
+      "in-progress",
+      "blocked-issues",
+      "deferred-issues",
+      "closed-issues",
+    ],
+  },
+  {
+    label: "Priority",
+    presetNames: [
+      "high-priority",
+      "priority-0",
+      "priority-1",
+      "priority-2",
+      "priority-3",
+      "priority-4",
+    ],
+  },
+  {
+    label: "Other useful filters",
+    presetNames: ["my-issues", "unassigned", "recently-updated"],
+  },
+] as const;
+
 const RECENT_QUERY_STORAGE_KEY = "bb-beads:recent-query-history";
 
 function readRecentQueries(): string[] {
@@ -176,11 +204,11 @@ export function QueryAssist({
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0 max-md:pointer-coarse:h-10 max-md:pointer-coarse:w-10"
-          aria-label="Open query assistance"
+          className="h-8 shrink-0 gap-1 px-2 text-xs max-md:pointer-coarse:h-10 max-md:pointer-coarse:px-2.5"
+          aria-label="Open quick filters"
         >
           <Icon name="SlidersHorizontal" className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden @md:inline">Quick filters</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-xl gap-3 p-4 max-md:pointer-coarse:max-h-[90dvh] max-md:pointer-coarse:overflow-y-auto max-md:pointer-coarse:p-4">
@@ -250,20 +278,31 @@ export function QueryAssist({
         </div>
 
         {tab === "presets" ? (
-          <div className="grid max-h-[min(28rem,50dvh)] gap-1.5 overflow-y-auto pr-1" role="list" aria-label="Beads query presets">
-            {BUILT_IN_PRESETS.map((preset) => (
-              <button
-                key={preset.name}
-                type="button"
-                className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-left hover:bg-state-hover max-md:pointer-coarse:min-h-14"
-                onClick={() => applyPreset(preset.name)}
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{preset.label}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{preset.description}</span>
-                </span>
-                <Icon name="ArrowRight" className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </button>
+          <div className="grid max-h-[min(28rem,50dvh)] gap-4 overflow-y-auto pr-1" role="list" aria-label="Beads quick filters">
+            {QUICK_FILTER_GROUPS.map((group) => (
+              <section key={group.label} className="grid gap-1.5" aria-labelledby={`quick-filter-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+                <h3 id={`quick-filter-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} className="text-xs font-semibold text-muted-foreground">
+                  {group.label}
+                </h3>
+                {group.presetNames.map((presetName) => {
+                  const preset = BUILT_IN_PRESETS.find((candidate) => candidate.name === presetName);
+                  if (!preset) return null;
+                  return (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-left hover:bg-state-hover max-md:pointer-coarse:min-h-14"
+                      onClick={() => applyPreset(preset.name)}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">{preset.label}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{preset.description}</span>
+                      </span>
+                      <Icon name="ArrowRight" className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    </button>
+                  );
+                })}
+              </section>
             ))}
           </div>
         ) : tab === "examples" ? (

@@ -9,7 +9,7 @@ JSON output; it never reads the Beads database or `issues.jsonl` directly.
 The **Beads** panel is available from the BB navigation for the selected
 project. It provides:
 
-- issue search and status filtering;
+- issue search with schema-backed query assistance and quick filters;
 - Kanban, list, and epic/milestone progress views;
 - epic and milestone completion cards with status breakdowns;
 - an unassigned-work section for issues without a container;
@@ -62,6 +62,13 @@ The search input supports two modes:
 The mode switch is automatic and transparent — the same `analyze()` call
 drives both paths. A query that contains only identifiers and strings with
 no operators stays in text-search mode.
+
+Status and priority are intentionally not separate issue-list filters. The
+**Quick filters** control opens presets and the structured builder, and writes
+the resulting expression into the search field. The query text is therefore
+the single source of truth for issue filtering; it remains visible, editable,
+composable, and shareable instead of being combined with hidden local filter
+state.
 
 ### Supported syntax
 
@@ -145,8 +152,7 @@ Before any query reaches `bd query`, the plugin runs `analyze()` locally.
 If the combined lexer + parser + schema validator produces even one error
 diagnostic, the call throws and **no CLI invocation occurs**. This guards
 against sending malformed expressions to the backend. When a query passes
-local validation, it is wrapped in parentheses and combined with any
-active status/priority filter clauses before `bd query` execution.
+local validation, it is wrapped in parentheses before `bd query` execution.
 
 ### Mobile query assistance
 

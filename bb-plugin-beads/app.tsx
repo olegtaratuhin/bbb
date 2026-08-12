@@ -1149,12 +1149,10 @@ function EpicProgressCard({
 function EpicProgressView({
   issues,
   visibleIssues,
-  statusFilter,
   onOpenIssue,
 }: {
   issues: Issue[];
   visibleIssues: Issue[];
-  statusFilter: readonly IssueStatus[];
   onOpenIssue: (issue: Issue) => void;
 }) {
   const progress = useMemo(() => buildEpicProgress(issues), [issues]);
@@ -1162,15 +1160,7 @@ function EpicProgressView({
     () => new Set(getUnassignedWorkIssues(issues).map((issue) => issue.id)),
     [issues],
   );
-  const visibleProgress = useMemo(
-    () =>
-        progress.filter(
-        (entry) =>
-          statusFilter.length === 0 ||
-          statusFilter.some((status) => (entry.statusCounts[status] ?? 0) > 0),
-      ),
-    [progress, statusFilter],
-  );
+  const visibleProgress = progress;
   const visibleUnassigned = visibleIssues.filter((issue) =>
     unassignedIds.has(issue.id),
   );
@@ -1456,7 +1446,6 @@ function EpicNavigationRail({
 function EpicWorkspace({
   issues,
   visibleIssues,
-  statusFilter,
   selectedEpicId,
   loading,
   onBack,
@@ -1464,7 +1453,6 @@ function EpicWorkspace({
 }: {
   issues: Issue[];
   visibleIssues: Issue[];
-  statusFilter: readonly IssueStatus[];
   selectedEpicId: string | null;
   loading: boolean;
   onBack: () => void;
@@ -1515,7 +1503,6 @@ function EpicWorkspace({
           <EpicProgressView
             issues={issues}
             visibleIssues={visibleIssues}
-            statusFilter={statusFilter}
             onOpenIssue={onOpenIssue}
           />
         )}
@@ -2018,8 +2005,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [detail, setDetail] = useState<Issue | null>(null);
   const [query, setQuery] = useState("");
-  const [selectedStatuses, setSelectedStatuses] = useState<IssueStatus[]>([]);
-  const [selectedPriorities, setSelectedPriorities] = useState<number[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("manual");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2291,30 +2276,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   );
 
   const visibleIssues = useMemo(() => {
-    const statusFiltered =
-      selectedStatuses.length === 0
-        ? scopedIssues
-        : scopedIssues.filter((issue) =>
-            selectedStatuses.includes(issue.status as IssueStatus),
-          );
-    const priorityFiltered =
-      selectedPriorities.length === 0
-        ? statusFiltered
-        : statusFiltered.filter((issue) =>
-            selectedPriorities.includes(issue.priority ?? 2),
-          );
     const textFiltered = queryMode
       ? beadsQuery
-        ? priorityFiltered
+        ? scopedIssues
         : []
-      : priorityFiltered.filter((issue) => issueMatches(issue, query));
+      : scopedIssues.filter((issue) => issueMatches(issue, query));
     return sortIssues(textFiltered, sortMode);
   }, [
     beadsQuery,
     query,
     queryMode,
-    selectedPriorities,
-    selectedStatuses,
     scopedIssues,
     sortMode,
   ]);
@@ -2352,8 +2323,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
 
   function openDependencyGraph(issue: Issue) {
     setQuery("");
-    setSelectedStatuses([]);
-    setSelectedPriorities([]);
     setSortMode("manual");
     setGraphFocusId(issue.id);
     setViewMode("graph");
@@ -2468,22 +2437,16 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     }
   }
 
-  // Determine which columns to show based on status filter
+  // Keep the board's status columns stable while query filters change.
   const visibleColumns = useMemo(() => {
-    const columns: BoardStatus[] =
-      selectedStatuses.length === 0
-        ? [...STATUSES]
-        : selectedStatuses.length > 0
-          ? [...selectedStatuses]
-          : [...STATUSES];
+    const columns: BoardStatus[] = [...STATUSES];
     if (
-      selectedStatuses.length === 0 &&
       scopedIssues.some((issue) => !STATUSES.includes(issue.status as IssueStatus))
     ) {
       columns.push(OTHER_STATUS);
     }
     return columns;
-  }, [scopedIssues, selectedStatuses]);
+  }, [scopedIssues]);
 
   if (settingsLoading) {
     return (
@@ -2663,73 +2626,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               <div className="flex min-w-48 flex-[1_1_18rem] @md:max-w-[28rem]">
                 <QueryInput value={query} onChange={setQuery} />
               </div>
-              <FilterChip
-                icon="Circle"
-                label="Status"
-                selectedLabels={selectedStatuses.map(statusLabel)}
-              >
-                {STATUSES.map((option) => (
-                  <FilterOption
-                    key={option}
-                    checked={selectedStatuses.includes(option)}
-                    onChange={(checked) =>
-                      setSelectedStatuses((current) =>
-                        checked
-                          ? current.includes(option)
-                            ? current
-                            : [...current, option]
-                          : current.filter((value) => value !== option),
-                      )
-                    }
-                  >
-                    <span className="flex items-center gap-2">
-                      <StatusIcon status={option} className="h-3 w-3" />
-                      {statusLabel(option)}
-                    </span>
-                  </FilterOption>
-                ))}
-              </FilterChip>
-              <FilterChip
-                icon="ArrowUpDown"
-                label="Priority"
-                selectedLabels={selectedPriorities.map(
-                  (priority) => PRIORITY_LABELS[priority],
-                )}
-              >
-                {PRIORITIES.map((priority) => (
-                  <FilterOption
-                    key={priority}
-                    checked={selectedPriorities.includes(priority)}
-                    onChange={(checked) =>
-                      setSelectedPriorities((current) =>
-                        checked
-                          ? current.includes(priority)
-                            ? current
-                            : [...current, priority]
-                          : current.filter((value) => value !== priority),
-                      )
-                    }
-                  >
-                    <span className="flex items-center gap-2">
-                      <PriorityIcon priority={priority} className="h-3 w-3" />
-                      {PRIORITY_LABELS[priority]}
-                    </span>
-                  </FilterOption>
-                ))}
-              </FilterChip>
-              {selectedStatuses.length > 0 || selectedPriorities.length > 0 ? (
-                <button
-                  type="button"
-                  className="flex h-6 shrink-0 items-center gap-1 rounded-md border border-dashed border-border px-2.5 text-xs text-muted-foreground hover:border-input hover:text-foreground max-md:pointer-coarse:h-8"
-                  onClick={() => {
-                    setSelectedStatuses([]);
-                    setSelectedPriorities([]);
-                  }}
-                >
-                  <Icon name="X" className="h-3 w-3" aria-hidden="true" />
-                  Clear
-                </button>
-              ) : null}
             </div>
             <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
               {loading ? "Loading…" : `${visibleIssues.length} issues`}
@@ -2776,7 +2672,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               <EpicWorkspace
                 issues={issues}
                 visibleIssues={visibleIssues}
-                statusFilter={selectedStatuses}
                 selectedEpicId={epicScopeActive ? epicScopeId : null}
                 loading={loading}
                 onBack={returnToEpicProgress}
@@ -2810,7 +2705,6 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             <EpicProgressView
               issues={issues}
               visibleIssues={visibleIssues}
-              statusFilter={selectedStatuses}
               onOpenIssue={openIssue}
             />
           )}

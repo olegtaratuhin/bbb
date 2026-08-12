@@ -598,6 +598,51 @@ export const BUILT_IN_PRESETS: readonly QueryPreset[] = [
     ],
   },
   {
+    name: "priority-0",
+    label: "P0 · Critical",
+    description: "Issues with critical priority",
+    connector: "AND",
+    rows: () => [
+      createRow("p0", "priority", "=", "0"),
+    ],
+  },
+  {
+    name: "priority-1",
+    label: "P1 · High",
+    description: "Issues with high priority",
+    connector: "AND",
+    rows: () => [
+      createRow("p1", "priority", "=", "1"),
+    ],
+  },
+  {
+    name: "priority-2",
+    label: "P2 · Medium",
+    description: "Issues with medium priority",
+    connector: "AND",
+    rows: () => [
+      createRow("p2", "priority", "=", "2"),
+    ],
+  },
+  {
+    name: "priority-3",
+    label: "P3 · Low",
+    description: "Issues with low priority",
+    connector: "AND",
+    rows: () => [
+      createRow("p3", "priority", "=", "3"),
+    ],
+  },
+  {
+    name: "priority-4",
+    label: "P4 · Backlog",
+    description: "Issues with backlog priority",
+    connector: "AND",
+    rows: () => [
+      createRow("p4", "priority", "=", "4"),
+    ],
+  },
+  {
     name: "my-issues",
     label: "My Assigned Issues",
     description: "Issues assigned to the current user; requires assignee context",
@@ -617,6 +662,24 @@ export const BUILT_IN_PRESETS: readonly QueryPreset[] = [
     connector: "AND",
     rows: () => [
       createRow("ip", "status", "=", "in_progress"),
+    ],
+  },
+  {
+    name: "deferred-issues",
+    label: "Deferred Issues",
+    description: "All issues with status deferred",
+    connector: "AND",
+    rows: () => [
+      createRow("deferred", "status", "=", "deferred"),
+    ],
+  },
+  {
+    name: "closed-issues",
+    label: "Closed Issues",
+    description: "All issues with status closed",
+    connector: "AND",
+    rows: () => [
+      createRow("closed", "status", "=", "closed"),
     ],
   },
   {

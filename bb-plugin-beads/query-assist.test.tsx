@@ -24,7 +24,7 @@ function renderAssist(initialQuery = "") {
 }
 
 function openAssist() {
-  fireEvent.click(screen.getByRole("button", { name: "Open query assistance" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open quick filters" }));
   return screen.getByRole("dialog");
 }
 

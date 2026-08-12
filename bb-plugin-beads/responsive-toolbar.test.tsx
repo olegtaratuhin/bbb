@@ -28,8 +28,7 @@ function renderToolbar() {
       </div>
       <div data-testid="secondary-row">
         <input aria-label="Search Beads issues" />
-        <button type="button" aria-label="Status filter">Status</button>
-        <button type="button" aria-label="Priority filter">Priority</button>
+        <button type="button" aria-label="Open quick filters">Quick filters</button>
         <span aria-label="Issue count">12 issues</span>
         <button type="button" aria-label="Sort filter">Sort</button>
       </div>
@@ -43,7 +42,7 @@ describe("Beads toolbar layout contract", () => {
     const toolbar = screen.getByTestId("beads-toolbar");
     expect(within(toolbar).getByRole("combobox", { name: "Beads project" })).toBeTruthy();
     expect(within(toolbar).getByRole("combobox", { name: "Issue scope" })).toBeTruthy();
-    expect(within(toolbar).getAllByRole("button")).toHaveLength(9);
+    expect(within(toolbar).getAllByRole("button")).toHaveLength(8);
     expect(within(toolbar).getByRole("textbox", { name: "Search Beads issues" })).toBeTruthy();
     expect(within(toolbar).getByLabelText("Issue count").textContent).toContain("12 issues");
   });

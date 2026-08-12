@@ -80,7 +80,7 @@ describe("QueryInput", () => {
   it("routes an applied mobile preset through the controlled query value", () => {
     renderInput();
     const input = screen.getByRole("textbox", { name: "Search Beads issues" });
-    fireEvent.click(screen.getByRole("button", { name: "Open query assistance" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open quick filters" }));
     fireEvent.click(screen.getByRole("button", { name: /Open Issues/ }));
 
     expect((input as HTMLInputElement).value).toBe("status=open");

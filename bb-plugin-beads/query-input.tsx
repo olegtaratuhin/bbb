@@ -166,7 +166,7 @@ export function QueryInput({
             onChange(event.target.value);
             setCursor(event.target.selectionStart ?? event.target.value.length);
           }}
-          className={`h-8 min-w-0 pr-10 font-[inherit] text-sm leading-5 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
+          className={`h-8 min-w-0 pr-28 @max-md:pr-10 font-[inherit] text-sm leading-5 focus-visible:border-ring focus-visible:ring-0 ${queryMode ? "relative z-[2] bg-transparent text-transparent caret-foreground selection:bg-primary/20" : ""}`}
         />
         <div className="absolute right-0.5 top-1/2 z-[3] -translate-y-1/2">
           <QueryAssist
