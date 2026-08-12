@@ -2486,13 +2486,13 @@ function BeadsPanel({ subPath }: { subPath: string }) {
               />
             </div>
             <div
-              className="relative flex shrink-0 overflow-hidden rounded-md border border-border"
+              className="relative flex w-48 shrink-0 overflow-hidden rounded-md border border-border"
               role="group"
               aria-label="Issue scope"
             >
               <select
                 aria-label="Issue scope"
-                className="h-8 max-w-48 appearance-none bg-transparent px-2 pr-7 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="h-8 w-full min-w-0 appearance-none bg-transparent px-2 pr-7 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={epicScopeActive ? epicScopeId ?? "" : ""}
                 onChange={(event) => {
                   const nextEpicId = event.target.value;
