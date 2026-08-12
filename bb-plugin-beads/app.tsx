@@ -62,6 +62,8 @@ import {
   chooseProjectId,
   projectIdFromComposerScope,
   readRootComposeProjectId,
+  readStoredBeadsProjectId,
+  writeStoredBeadsProjectId,
 } from "./project-context";
 import { chooseDefaultBeadsProject } from "./project-selection";
 
@@ -2035,7 +2037,11 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsRefresh, setProjectsRefresh] = useState(0);
   const [initializingProject, setInitializingProject] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() =>
+    readStoredBeadsProjectId(
+      typeof window === "undefined" ? undefined : window.localStorage,
+    ),
+  );
   const [rootComposeProjectId, setRootComposeProjectId] = useState(() =>
     readRootComposeProjectId(
       typeof window === "undefined" ? undefined : window.localStorage,
@@ -2103,14 +2109,15 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   }, [projectsRefresh, workspacePathOverride]);
 
   useEffect(() => {
-    setSelectedProjectId(null);
-  }, [currentProjectId]);
-
-  useEffect(() => {
+    if (projectsLoading) return;
     if (activeProjectId && !beadsProjects.some((project) => project.id === activeProjectId)) {
       setSelectedProjectId(null);
+      writeStoredBeadsProjectId(
+        typeof window === "undefined" ? undefined : window.localStorage,
+        null,
+      );
     }
-  }, [activeProjectId, beadsProjects]);
+  }, [activeProjectId, beadsProjects, projectsLoading]);
 
   const effectiveRpcProjectId = workspacePathOverride ? undefined : activeProjectId ?? undefined;
   const selectedId = subPath.startsWith("issue/")
@@ -2316,6 +2323,10 @@ function BeadsPanel({ subPath }: { subPath: string }) {
   function selectProject(nextProjectId: string) {
     if (!nextProjectId || projectSelectionLocked) return;
     setSelectedProjectId(nextProjectId);
+    writeStoredBeadsProjectId(
+      typeof window === "undefined" ? undefined : window.localStorage,
+      nextProjectId,
+    );
     setIssues([]);
     setDetail(null);
     setError(null);
