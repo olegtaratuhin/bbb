@@ -32,7 +32,6 @@
     "hooks",
     "lib",
     "query-core",
-    "skills",
     "types",
     "README.md",
     "LICENSE"
@@ -49,10 +48,7 @@
       "icon": "Zap"
     },
     "server": "./server.ts",
-    "app": "./app.tsx",
-    "skills": [
-      "skills"
-    ]
+    "app": "./app.tsx"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.1.3",
