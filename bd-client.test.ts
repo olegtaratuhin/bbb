@@ -585,7 +585,11 @@ describe("runBdJson", () => {
   it("times out a local bd process", async () => {
     const directory = await mkdtemp(join(tmpdir(), "bb-beads-timeout-"));
     const binary = join(directory, "fake-bd");
-    await writeFile(binary, "#!/bin/sh\nsleep 10\n", "utf8");
+    await writeFile(
+      binary,
+      `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} -e 'setTimeout(() => {}, 10000)'\n`,
+      "utf8",
+    );
     await chmod(binary, 0o755);
     const original = process.env.BEADS_BIN;
     try {
@@ -606,7 +610,11 @@ describe("runBdJson", () => {
   it("limits local bd output", async () => {
     const directory = await mkdtemp(join(tmpdir(), "bb-beads-output-"));
     const binary = join(directory, "fake-bd");
-    await writeFile(binary, "#!/bin/sh\nhead -c 9000000 /dev/zero\n", "utf8");
+    await writeFile(
+      binary,
+      `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} -e 'process.stdout.write("x".repeat(9000000))'\n`,
+      "utf8",
+    );
     await chmod(binary, 0o755);
     const original = process.env.BEADS_BIN;
     try {
