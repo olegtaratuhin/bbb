@@ -1,4 +1,4 @@
-import type { Issue, IssueDependency } from "./bd-client";
+import type { Issue, IssueDependency } from "../beads/bd-client";
 
 export type GraphRelation = "blocking" | "hierarchy" | "related" | "other";
 export type GraphOrientation = "horizontal" | "vertical";

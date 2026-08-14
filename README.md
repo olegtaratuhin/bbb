@@ -150,10 +150,11 @@ bb plugin install . --yes
 bb plugin reload beads
 ```
 
-The repository contains a headless query core under `query-core/`, a server
-adapter in `server.ts`, and the bb React surface in `app.tsx`. Vendored UI
-components live under `components/` so the plugin can be installed from GitHub
-without depending on bb's private source tree.
+The repository is organized into four modules: the Beads CLI and project
+adapter under `beads/`, the headless query language under `query-core/`, the
+React surface and view models under `ui/`, and the BB entrypoints under
+`plugin/`. Vendored UI primitives live under `components/` so the plugin can
+be installed from GitHub without depending on bb's private source tree.
 
 The test suite covers the query core, CLI/RPC normalization, host routing,
 project selection, cache and loading behavior, responsive toolbar structure,

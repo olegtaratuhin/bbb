@@ -19,7 +19,7 @@ import {
   type BdResult,
   type BdOk,
   type BdErr,
-} from "../../bd-client";
+} from "../../beads/bd-client";
 
 // ── buildBdArgs ──────────────────────────────────────────────────────────────
 

@@ -10,12 +10,12 @@ import {
   showIssueArgs,
   updateIssueArgs,
   type Issue,
-} from "./bd-client";
+} from "../beads/bd-client";
 import {
   resolveWorkspaceTarget,
   selectLocalWorkspaceSource,
   type ProjectSourceLike,
-} from "./workspace-resolution";
+} from "../beads/workspace-resolution";
 
 const dependencySchema = z
   .object({

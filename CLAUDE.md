@@ -70,12 +70,13 @@ bb plugin build
 
 ## Architecture Overview
 
-The plugin is a root-installable BB package. `server.ts` exposes a JSON RPC
-bridge to the `bd` CLI and routes project-backed commands to the owning host.
-`app.tsx` renders the project panel and consumes that contract. `query-core/`
-contains the React- and BB-independent query lexer, parser, validation,
-completion, highlighting, and mobile-assistance model. Vendored UI sources are
-under `components/`.
+The plugin is a root-installable BB package. `plugin/server.ts` exposes a JSON
+RPC bridge to the `bd` CLI and routes project-backed commands to the owning
+host. `plugin/app.tsx` renders the project panel and consumes that contract.
+The `beads/` module owns CLI and project integration, `query-core/` contains
+the React- and BB-independent query lexer, parser, validation, completion,
+highlighting, and mobile-assistance model, and `ui/` owns the React surface and
+view models. Vendored UI primitives are under `components/`.
 
 ## Conventions & Patterns
 

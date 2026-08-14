@@ -5,8 +5,8 @@ import {
   getDescendantWorkIssues,
   isContainerIssue,
   type EpicProgress,
-} from "../../epic-progress";
-import type { Issue } from "../../bd-client";
+} from "../../ui/epic-progress";
+import type { Issue } from "../../beads/bd-client";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

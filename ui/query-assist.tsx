@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { analyze } from "./query-core";
+import { analyze } from "../query-core";
 import {
   BUILT_IN_PRESETS,
   clearRow,
@@ -20,8 +20,8 @@ import {
   validateRows,
   type FilterConnector,
   type FilterRow,
-} from "./query-core";
-import { Button } from "./components/ui/button";
+} from "../query-core";
+import { Button } from "../components/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -31,9 +31,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "./components/ui/dialog";
-import { Icon } from "./components/ui/icon";
-import { Input } from "./components/ui/input";
+} from "../components/ui/dialog";
+import { Icon } from "../components/ui/icon";
+import { Input } from "../components/ui/input";
 
 interface QueryAssistProps {
   query: string;

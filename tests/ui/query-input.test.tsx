@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import * as React from "react";
-import { QueryInput } from "../../query-input";
+import { QueryInput } from "../../ui/query-input";
 
 afterEach(cleanup);
 

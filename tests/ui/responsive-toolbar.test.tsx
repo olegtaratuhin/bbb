@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { BeadsToolbarFrame } from "../../responsive-toolbar";
+import { BeadsToolbarFrame } from "../../ui/responsive-toolbar";
 
 afterEach(cleanup);
 

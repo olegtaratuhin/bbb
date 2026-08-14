@@ -7,9 +7,9 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { type CompletionItem, type HighlightSpan } from "./query-core";
-import { applyCompletion, createQueryEditorModel } from "./query-editor-model";
-import { Input } from "./components/ui/input";
+import { type CompletionItem, type HighlightSpan } from "../query-core";
+import { applyCompletion, createQueryEditorModel } from "../query-core/editor-model";
+import { Input } from "../components/ui/input";
 import { QueryAssist } from "./query-assist";
 
 const HIGHLIGHT_CLASSES: Record<HighlightSpan["kind"], string> = {

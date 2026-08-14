@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import * as React from "react";
-import { QueryAssist } from "../../query-assist";
+import { QueryAssist } from "../../ui/query-assist";
 
 afterEach(() => {
   cleanup();

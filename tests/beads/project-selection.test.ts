@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseDefaultBeadsProject } from "../../project-selection";
+import { chooseDefaultBeadsProject } from "../../beads/project-selection";
 
 const projects = [
   { id: "project-a", hasBeads: true },

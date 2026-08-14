@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { IssueViewSkeleton } from "../../loading-skeleton";
+import { IssueViewSkeleton } from "../../ui/loading-skeleton";
 
 afterEach(cleanup);
 

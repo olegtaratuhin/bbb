@@ -16,11 +16,11 @@ bb plugin install . --yes
 bb plugin reload beads
 ```
 
-Tests are grouped by responsibility under `tests/`: production logic lives in
-`tests/unit/`, React surface checks in `tests/ui/`, server and CLI checks in
-`tests/integration/`, and the portable query-language suite in
-`tests/query-core/`. Shared test-only hosts and fixtures live in
-`tests/fixtures/` and are not part of the published plugin package.
+Tests mirror the production modules under `tests/`: Beads client checks live
+in `tests/beads/`, React surface checks in `tests/ui/`, BB entrypoint and CLI
+checks in `tests/plugin/`, and the portable query-language suite in
+`tests/query-core/`. Plugin test fixtures live under `tests/plugin/fixtures/`
+and are not part of the published package.
 
 Use `bd prime` for the project tracking workflow. Create or update a Beads
 issue before beginning substantial work and include the issue ID in commits.

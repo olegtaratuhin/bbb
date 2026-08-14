@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BbPluginApi } from "@bb/plugin-sdk";
-import plugin from "../../server";
+import plugin from "../../plugin/server";
 
 vi.mock("@bb/plugin-sdk", () => ({
   defineRpcContract: (contract: unknown) => contract,

@@ -1,5 +1,5 @@
-import { analyze } from "./query-core";
-import type { Diagnostic } from "./query-core";
+import { analyze } from "./index";
+import type { Diagnostic } from "./index";
 
 export const QUERY_EXECUTION_DEBOUNCE_MS = 180;
 

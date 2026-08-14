@@ -6,7 +6,7 @@ import {
   type Diagnostic,
   type HighlightSpan,
   type QueryAnalysis,
-} from "./query-core";
+} from "./index";
 
 export interface QueryEditorModel {
   source: string;

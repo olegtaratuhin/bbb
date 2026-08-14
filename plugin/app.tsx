@@ -17,28 +17,28 @@ import {
   useSettings,
 } from "@bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
-import type { Issue } from "./bd-client";
-import { QueryInput } from "./query-input";
+import type { Issue } from "../beads/bd-client";
+import { QueryInput } from "../ui/query-input";
 import {
   invalidateProjectCatalog,
   loadProjectCatalog,
   readProjectCatalog,
   type BeadsProjectOption,
-} from "./project-catalog";
+} from "../beads/project-catalog";
 import {
   hasFreshCachedIssues,
   invalidateIssueCache,
   makeIssueCacheKey,
   readCachedIssues,
   writeCachedIssues,
-} from "./issue-cache";
-import { IssueViewSkeleton } from "./loading-skeleton";
-import { BeadsToolbarFrame } from "./responsive-toolbar";
-import type { ViewMode } from "./view-mode";
+} from "../beads/issue-cache";
+import { IssueViewSkeleton } from "../ui/loading-skeleton";
+import { BeadsToolbarFrame } from "../ui/responsive-toolbar";
+import type { ViewMode } from "../ui/view-mode";
 import {
   describeQueryExecution,
   QUERY_EXECUTION_DEBOUNCE_MS,
-} from "./query-execution";
+} from "../query-core/execution";
 import {
   buildDependencyEdges,
   GRAPH_NODE_HEIGHT,
@@ -46,14 +46,14 @@ import {
   layoutDependencyGraph,
   type DependencyEdge,
   type GraphOrientation,
-} from "./dependency-graph";
+} from "../ui/dependency-graph";
 import {
   buildEpicProgress,
   getDescendantWorkIssues,
   getUnassignedWorkIssues,
   isContainerIssue,
   type EpicProgress,
-} from "./epic-progress";
+} from "../ui/epic-progress";
 import { Button } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icon";
 import {
@@ -80,8 +80,8 @@ import {
   readRootComposeProjectId,
   readStoredBeadsProjectId,
   writeStoredBeadsProjectId,
-} from "./project-context";
-import { chooseDefaultBeadsProject } from "./project-selection";
+} from "../beads/project-context";
+import { chooseDefaultBeadsProject } from "../beads/project-selection";
 
 const STATUSES = [
   "open",

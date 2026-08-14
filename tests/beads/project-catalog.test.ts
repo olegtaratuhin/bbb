@@ -7,7 +7,7 @@ import {
   PROJECT_CATALOG_TTL_MS,
   readProjectCatalog,
   type BeadsProjectOption,
-} from "../../project-catalog";
+} from "../../beads/project-catalog";
 
 const projects: BeadsProjectOption[] = [
   {

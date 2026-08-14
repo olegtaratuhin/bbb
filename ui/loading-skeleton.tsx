@@ -1,4 +1,4 @@
-import { Card, CardContent } from "./components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import type { ViewMode } from "./view-mode";
 
 function SkeletonBlock({ className }: { className: string }) {

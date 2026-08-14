@@ -2,7 +2,7 @@
 //
 // No side effects on import.  No RPC, filesystem, or CLI calls.
 
-import type { Issue } from "./bd-client";
+import type { Issue } from "../beads/bd-client";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

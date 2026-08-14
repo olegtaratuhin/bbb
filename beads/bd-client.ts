@@ -6,7 +6,7 @@
 
 import { spawn } from "node:child_process";
 import type { SpawnOptions } from "node:child_process";
-import { analyze } from "./query-core";
+import { analyze } from "../query-core";
 
 export const DEFAULT_BD_TIMEOUT_MS = 30_000;
 export const MAX_BD_OUTPUT_BYTES = 8 * 1024 * 1024;

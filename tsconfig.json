@@ -27,9 +27,9 @@
     "skipLibCheck": false
   },
   "include": [
-    "server.ts",
-    "app.tsx",
-    "bd-client.ts",
+    "beads",
+    "plugin",
+    "ui",
     "types",
     "components",
     "lib",
