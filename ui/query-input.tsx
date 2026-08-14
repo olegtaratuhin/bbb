@@ -7,8 +7,8 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { type CompletionItem, type HighlightSpan } from "../query-core";
-import { applyCompletion, createQueryEditorModel } from "../query-core/editor-model";
+import { type CompletionItem, type HighlightSpan } from "../beads-query-language";
+import { applyCompletion, createQueryEditorModel } from "../beads-query-language/editor-model";
 import { Input } from "../components/ui/input";
 import { QueryAssist } from "./query-assist";
 

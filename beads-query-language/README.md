@@ -159,7 +159,7 @@ field("my_field", "My Field", "Description", "enum", allComparisons, [
 4. Add aliases if needed (e.g., `["myfield"]`).
 5. Update `validateComparison()` in `validate.ts` if the field has special
    value constraints beyond enum/boolean/number/date validation.
-6. Add test cases in `tests/query-core/query-core.test.ts` covering the new
+6. Add test cases in `tests/beads-query-language/beads-query-language.test.ts` covering the new
    field's valid and invalid values.
 
 ### Adding a new value type
@@ -179,7 +179,7 @@ regex syntax), extend:
 additional logic:
 
 ```ts
-import { lex, parse, validate, complete, highlight } from "./query-core";
+import { lex, parse, validate, complete, highlight } from "./index";
 
 function myAnalyze(source: string) {
   const tokens = lex(source);
@@ -196,10 +196,10 @@ highlighting) without building the plugin or invoking `bd`:
 
 ```sh
 cd bb-plugin-beads
-npm test -- --reporter=verbose query-core
+npm test -- --reporter=verbose beads-query-language
 ```
 
-This executes `tests/query-core/query-core.test.ts` and covers:
+This executes `tests/beads-query-language/beads-query-language.test.ts` and covers:
 
 - Tokenization with operators, keywords, values, and UTF-16 spans
 - Quoted strings with escapes, durations, and date-shaped identifiers

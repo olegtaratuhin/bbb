@@ -6,7 +6,7 @@ import {
   highlights,
   lex,
   parse,
-} from "../../query-core/index";
+} from "../../beads-query-language/index";
 
 describe("Beads query lexer", () => {
   it("tokenizes operators, keywords, values, and UTF-16 spans", () => {

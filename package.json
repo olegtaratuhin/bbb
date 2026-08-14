@@ -30,7 +30,7 @@
     "components",
     "hooks",
     "lib",
-    "query-core",
+    "beads-query-language",
     "types",
     "README.md",
     "LICENSE"

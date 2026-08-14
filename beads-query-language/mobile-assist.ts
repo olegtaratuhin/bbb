@@ -2,7 +2,7 @@
  * Portable mobile Beads query-assist model.
  *
  * Framework-neutral, pure TypeScript. Usable by React, native, or remote BB
- * clients. Reuses query-core APIs (analyze, complete, fieldDefinition,
+ * clients. Reuses beads-query-language APIs (analyze, complete, fieldDefinition,
  * FIELD_DEFINITIONS) rather than duplicating grammar or validation.
  */
 
@@ -104,7 +104,7 @@ export function groupCompletionItems(items: readonly CompletionItem[]): Completi
  *
  * This is the primary framework-neutral API: given a source string and
  * cursor offset, it returns analysis, diagnostics, input state, completion
- * sections, and replacement ranges — all derived from existing query-core
+ * sections, and replacement ranges — all derived from existing beads-query-language
  * primitives.
  */
 export function projectQuery(source: string, cursor = source.length): QueryProjection {

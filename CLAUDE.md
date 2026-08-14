@@ -73,7 +73,7 @@ bb plugin build
 The plugin is a root-installable BB package. `plugin/server.ts` exposes a JSON
 RPC bridge to the `bd` CLI and routes project-backed commands to the owning
 host. `plugin/app.tsx` renders the project panel and consumes that contract.
-The `beads/` module owns CLI and project integration, `query-core/` contains
+The `beads/` module owns CLI and project integration, `beads-query-language/` contains
 the React- and BB-independent query lexer, parser, validation, completion,
 highlighting, and mobile-assistance model, and `ui/` owns the React surface and
 view models. Vendored UI primitives are under `components/`.
@@ -83,6 +83,6 @@ view models. Vendored UI primitives are under `components/`.
 - Keep `bd` as the source of truth; do not read `.beads/dolt` or JSONL exports
   directly.
 - Preserve project host routing for remote bb clients.
-- Keep query grammar logic in `query-core/` and cover public behavior with
+- Keep query grammar logic in `beads-query-language/` and cover public behavior with
   focused tests.
 - Use host theme tokens and the vendored BB UI primitives for new surfaces.

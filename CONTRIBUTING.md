@@ -19,7 +19,7 @@ bb plugin reload beads
 Tests mirror the production modules under `tests/`: Beads client checks live
 in `tests/beads/`, React surface checks in `tests/ui/`, BB entrypoint and CLI
 checks in `tests/plugin/`, and the portable query-language suite in
-`tests/query-core/`. Plugin test fixtures live under `tests/plugin/fixtures/`
+`tests/beads-query-language/`. Plugin test fixtures live under `tests/plugin/fixtures/`
 and are not part of the published package.
 
 Use `bd prime` for the project tracking workflow. Create or update a Beads

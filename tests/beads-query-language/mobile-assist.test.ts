@@ -37,8 +37,8 @@ import {
   type CompletionContext,
   type FilterConnector,
   type FilterRow,
-} from "../../query-core/mobile-assist";
-import { analyze } from "../../query-core/index";
+} from "../../beads-query-language/mobile-assist";
+import { analyze } from "../../beads-query-language/index";
 
 /* ------------------------------------------------------------------ */
 /*  1. Query Projection                                               */
@@ -701,7 +701,7 @@ describe("BUILT_IN_PRESETS", () => {
 });
 
 describe("query examples and recent history", () => {
-  it("keeps every curated example valid through query-core", () => {
+  it("keeps every curated example valid through beads-query-language", () => {
     expect(QUERY_EXAMPLES.length).toBeGreaterThan(2);
     for (const example of QUERY_EXAMPLES) {
       expect(analyze(example.query).diagnostics, example.name).toEqual([]);

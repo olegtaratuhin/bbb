@@ -38,7 +38,7 @@ import type { ViewMode } from "../ui/view-mode";
 import {
   describeQueryExecution,
   QUERY_EXECUTION_DEBOUNCE_MS,
-} from "../query-core/execution";
+} from "../beads-query-language/execution";
 import {
   buildDependencyEdges,
   GRAPH_NODE_HEIGHT,

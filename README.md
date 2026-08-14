@@ -127,7 +127,7 @@ created>=2025-01-15
 The query editor provides field/operator/value completion, token highlighting,
 schema validation, and diagnostics. Quick filters and the mobile builder
 produce the same query text used by manual entry. See
-[`query-core/README.md`](query-core/README.md) for the portable headless
+[`beads-query-language/README.md`](beads-query-language/README.md) for the portable headless
 contracts and supported grammar.
 
 Invalid structured queries are rejected before the plugin invokes `bd`. This
@@ -151,7 +151,7 @@ bb plugin reload beads
 ```
 
 The repository is organized into four modules: the Beads CLI and project
-adapter under `beads/`, the headless query language under `query-core/`, the
+adapter under `beads/`, the headless query language under `beads-query-language/`, the
 React surface and view models under `ui/`, and the BB entrypoints under
 `plugin/`. Vendored UI primitives live under `components/` so the plugin can
 be installed from GitHub without depending on bb's private source tree.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { analyze } from "../query-core";
+import { analyze } from "../beads-query-language";
 import {
   BUILT_IN_PRESETS,
   clearRow,
@@ -20,7 +20,7 @@ import {
   validateRows,
   type FilterConnector,
   type FilterRow,
-} from "../query-core";
+} from "../beads-query-language";
 import { Button } from "../components/ui/button";
 import {
   Dialog,

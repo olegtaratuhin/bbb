@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applyCompletion, createQueryEditorModel } from "../../query-core/editor-model";
+import { applyCompletion, createQueryEditorModel } from "../../beads-query-language/editor-model";
 import {
   describeQueryExecution,
   QUERY_EXECUTION_DEBOUNCE_MS,
-} from "../../query-core/execution";
+} from "../../beads-query-language/execution";
 
 describe("query editor model", () => {
   it("projects syntax, diagnostics, and completions without UI dependencies", () => {

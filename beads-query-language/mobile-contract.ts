@@ -3,7 +3,7 @@
  *
  * This file describes state and intent, not a React component or a mobile UI
  * toolkit. Native, web, and remote BB clients can project the same contract
- * onto their own controls while continuing to use query-core for grammar,
+ * onto their own controls while continuing to use beads-query-language for grammar,
  * diagnostics, completion, and serialization.
  */
 
@@ -33,7 +33,7 @@ export interface MobileQueryAssistState {
   mode: MobileQueryMode;
   inputState: MobileQueryInputState;
   source: string;
-  /** UTF-16 cursor offset, matching query-core spans and browser inputs. */
+  /** UTF-16 cursor offset, matching beads-query-language spans and browser inputs. */
   cursor: number;
   selection?: { from: number; to: number };
   focus: MobileQueryFocus;
@@ -90,7 +90,7 @@ export const MOBILE_QUERY_ASSIST_CONTRACT = {
   builder: {
     emptyRowPolicy: "omit" as const,
     connectorPolicy: "explicit-between-rows" as const,
-    validation: "query-core-before-execution" as const,
+    validation: "beads-query-language-before-execution" as const,
   },
   accessibility: {
     inputRole: "combobox" as const,

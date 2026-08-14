@@ -34,6 +34,6 @@
     "components",
     "lib",
     "hooks",
-    "query-core"
+    "beads-query-language"
   ]
 }

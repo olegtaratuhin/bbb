@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { analyze, parse } from "../../query-core";
+import { analyze, parse } from "../../beads-query-language";
 
 const cli = process.env.BEADS_BIN ?? "bd";
 const cwd = process.env.BEADS_COMPAT_CWD ?? process.cwd();
