@@ -4,7 +4,7 @@ import {
   MOBILE_QUERY_ASSIST_EXAMPLES,
   type MobileQueryAssistEvent,
   type MobileQueryAssistState,
-} from "./mobile-contract";
+} from "../../query-core/mobile-contract";
 
 describe("mobile query assistance contract", () => {
   it("defines portable input, focus, IME, and surface state", () => {

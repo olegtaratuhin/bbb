@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildDependencyEdges,
   layoutDependencyGraph,
-} from "./dependency-graph";
-import type { Issue } from "./bd-client";
+} from "../../dependency-graph";
+import type { Issue } from "../../bd-client";
 
 function issue(
   id: string,

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import plugin from "./server";
+import plugin from "../../server";
 import {
   createFakePluginHost,
   type CreateFakePluginHostOptions,
-} from "./fake-plugin-host";
+} from "../fixtures/fake-plugin-host";
 
 type PluginHostCommandResult = Awaited<ReturnType<NonNullable<CreateFakePluginHostOptions["hostCommandExecutor"]>>>;
 

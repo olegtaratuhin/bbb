@@ -82,7 +82,7 @@
   "scripts": {
     "build": "bb plugin build",
     "test": "vitest run",
-    "test:compat": "BEADS_QUERY_COMPAT=1 vitest run query-compatibility.test.ts",
+    "test:compat": "BEADS_QUERY_COMPAT=1 vitest run tests/integration/query-compatibility.test.ts",
     "typecheck": "tsc --noEmit"
   }
 }

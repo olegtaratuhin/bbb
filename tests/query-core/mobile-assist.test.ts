@@ -37,8 +37,8 @@ import {
   type CompletionContext,
   type FilterConnector,
   type FilterRow,
-} from "./mobile-assist";
-import { analyze } from "./index";
+} from "../../query-core/mobile-assist";
+import { analyze } from "../../query-core/index";
 
 /* ------------------------------------------------------------------ */
 /*  1. Query Projection                                               */

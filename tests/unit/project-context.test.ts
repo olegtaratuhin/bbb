@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   readStoredBeadsProjectId,
   writeStoredBeadsProjectId,
-} from "./project-context";
+} from "../../project-context";
 
 function storage() {
   const values = new Map<string, string>();

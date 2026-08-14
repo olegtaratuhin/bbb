@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   resolveWorkspaceTarget,
   selectLocalWorkspaceSource,
-} from "./workspace-resolution";
+} from "../../workspace-resolution";
 import {
   chooseProjectId,
   projectIdFromComposerScope,
   readRootComposeProjectId,
-} from "./project-context";
+} from "../../project-context";
 
 describe("resolveWorkspaceTarget", () => {
   it("prefers an explicit path override", () => {

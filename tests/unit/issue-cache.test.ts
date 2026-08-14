@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Issue } from "./bd-client";
+import type { Issue } from "../../bd-client";
 import {
   clearIssueCache,
   hasFreshCachedIssues,
@@ -8,7 +8,7 @@ import {
   makeIssueCacheKey,
   readCachedIssues,
   writeCachedIssues,
-} from "./issue-cache";
+} from "../../issue-cache";
 
 const issue = (id: string) => ({
   id,

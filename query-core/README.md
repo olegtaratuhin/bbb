@@ -159,8 +159,8 @@ field("my_field", "My Field", "Description", "enum", allComparisons, [
 4. Add aliases if needed (e.g., `["myfield"]`).
 5. Update `validateComparison()` in `validate.ts` if the field has special
    value constraints beyond enum/boolean/number/date validation.
-6. Add test cases in `query-core.test.ts` covering the new field's valid and
-   invalid values.
+6. Add test cases in `tests/query-core/query-core.test.ts` covering the new
+   field's valid and invalid values.
 
 ### Adding a new value type
 
@@ -199,7 +199,7 @@ cd bb-plugin-beads
 npm test -- --reporter=verbose query-core
 ```
 
-This executes `query-core.test.ts` and covers:
+This executes `tests/query-core/query-core.test.ts` and covers:
 
 - Tokenization with operators, keywords, values, and UTF-16 spans
 - Quoted strings with escapes, durations, and date-shaped identifiers
