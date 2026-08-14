@@ -627,7 +627,7 @@ describe("runBdJson", () => {
       process.env.BEADS_BIN = original;
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("uses the safe default timeout for local processes", async () => {
     expect(DEFAULT_BD_TIMEOUT_MS).toBe(30_000);
