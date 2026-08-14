@@ -4,3 +4,10 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Local operating-system and editor artifacts
+.DS_Store
+
+# BB plugin build and dependency output
+dist/
+node_modules/

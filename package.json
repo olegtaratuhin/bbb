@@ -1,6 +1,38 @@
 {
   "name": "bb-plugin-beads",
   "version": "0.1.0",
+  "description": "A Beads plugin for bb.",
+  "license": "MIT",
+  "homepage": "https://github.com/olegtaratuhin/bbb#readme",
+  "bugs": {
+    "url": "https://github.com/olegtaratuhin/bbb/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/olegtaratuhin/bbb.git"
+  },
+  "keywords": [
+    "bb-plugin",
+    "bb",
+    "beads",
+    "issue-tracker",
+    "kanban",
+    "query-language",
+    "agentic-development"
+  ],
+  "files": [
+    "dist",
+    "server.ts",
+    "app.tsx",
+    "components",
+    "hooks",
+    "lib",
+    "query-core",
+    "skills",
+    "types",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
   "engines": {
     "bb": ">=0.36",
@@ -13,7 +45,10 @@
       "icon": "Zap"
     },
     "server": "./server.ts",
-    "app": "./app.tsx"
+    "app": "./app.tsx",
+    "skills": [
+      "skills"
+    ]
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.1.3",

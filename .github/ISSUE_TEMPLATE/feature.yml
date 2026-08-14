@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement to the Beads bb plugin.
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the behavior or interaction you would like.
+    validations:
+      required: true
