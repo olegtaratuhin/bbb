@@ -1,6 +1,12 @@
+import { mkdtemp, chmod, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import {
   buildBdArgs,
+  buildBdEnvironment,
+  DEFAULT_BD_TIMEOUT_MS,
+  MAX_BD_OUTPUT_BYTES,
   normalizeIssues,
   listIssuesArgs,
   queryIssuesArgs,
@@ -559,6 +565,72 @@ describe("runBdJson", () => {
     } finally {
       process.env.BEADS_BIN = original;
     }
+  });
+
+  it("keeps only the bd-relevant environment keys", () => {
+    const environment = buildBdEnvironment({
+      PATH: "/bin",
+      HOME: "/tmp/home",
+      BEADS_DIR: "/tmp/beads",
+      SECRET_TOKEN: "do-not-forward",
+    });
+    expect(environment).toMatchObject({
+      PATH: "/bin",
+      HOME: "/tmp/home",
+      BEADS_DIR: "/tmp/beads",
+    });
+    expect(environment).not.toHaveProperty("SECRET_TOKEN");
+  });
+
+  it("times out a local bd process", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "bb-beads-timeout-"));
+    const binary = join(directory, "fake-bd");
+    await writeFile(binary, "#!/bin/sh\nsleep 10\n", "utf8");
+    await chmod(binary, 0o755);
+    const original = process.env.BEADS_BIN;
+    try {
+      process.env.BEADS_BIN = binary;
+      const result = await runBd(["list"], { timeoutMs: 25 });
+      expect(result).toMatchObject({
+        ok: false,
+        kind: "transport",
+        status: "timed_out",
+        code: "ETIMEDOUT",
+      });
+    } finally {
+      process.env.BEADS_BIN = original;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("limits local bd output", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "bb-beads-output-"));
+    const binary = join(directory, "fake-bd");
+    await writeFile(binary, "#!/bin/sh\nhead -c 9000000 /dev/zero\n", "utf8");
+    await chmod(binary, 0o755);
+    const original = process.env.BEADS_BIN;
+    try {
+      process.env.BEADS_BIN = binary;
+      const result = await runBd(["list"]);
+      expect(result).toMatchObject({
+        ok: false,
+        kind: "transport",
+        status: "output_limit",
+        code: "EOUTPUTLIMIT",
+      });
+      if (!result.ok) {
+        expect(Buffer.byteLength(result.stdout)).toBeLessThanOrEqual(
+          MAX_BD_OUTPUT_BYTES,
+        );
+      }
+    } finally {
+      process.env.BEADS_BIN = original;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the safe default timeout for local processes", async () => {
+    expect(DEFAULT_BD_TIMEOUT_MS).toBe(30_000);
   });
 });
 

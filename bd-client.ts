@@ -8,6 +8,27 @@ import { spawn } from "node:child_process";
 import type { SpawnOptions } from "node:child_process";
 import { analyze } from "./query-core";
 
+export const DEFAULT_BD_TIMEOUT_MS = 30_000;
+export const MAX_BD_OUTPUT_BYTES = 8 * 1024 * 1024;
+
+const BD_ENVIRONMENT_KEYS = [
+  "PATH",
+  "HOME",
+  "USER",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "BEADS_DIR",
+  "BEADS_ACTOR",
+  "BD_ACTOR",
+  "BD_CONFIG_DIR",
+  "BD_DB",
+  "BD_NO_DB",
+  "BD_JSON",
+  "BD_DOLT_AUTO_COMMIT",
+] as const;
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface Issue {
@@ -72,6 +93,17 @@ function resolveBdBin(): string {
 /** Get the current working directory for bd commands. */
 function getCwd(options?: { cwd?: string | undefined }): string {
   return options?.cwd ?? process.cwd();
+}
+
+export function buildBdEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const result: NodeJS.ProcessEnv = {};
+  for (const key of BD_ENVIRONMENT_KEYS) {
+    const value = environment[key];
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
 }
 
 // ── buildBdArgs ──────────────────────────────────────────────────────────────
@@ -211,10 +243,11 @@ export function runBd(
       return;
     }
 
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_BD_TIMEOUT_MS;
     const spawnOptions: SpawnOptions = {
       cwd,
       shell: false,
-      env: process.env,
+      env: buildBdEnvironment(),
       stdio: ["ignore", "pipe", "pipe"],
     };
 
@@ -229,18 +262,64 @@ export function runBd(
 
     const stdoutParts: Buffer[] = [];
     const stderrParts: Buffer[] = [];
+    let outputBytes = 0;
+    let transportStatus: "timed_out" | "output_limit" | null = null;
+    let settled = false;
 
-    child.stdout!.on("data", (chunk: Buffer) => stdoutParts.push(chunk));
-    child.stderr!.on("data", (chunk: Buffer) => stderrParts.push(chunk));
+    const appendOutput = (parts: Buffer[], chunk: Buffer) => {
+      if (settled) return;
+      const remaining = MAX_BD_OUTPUT_BYTES - outputBytes;
+      if (remaining <= 0) {
+        transportStatus = "output_limit";
+        child.kill("SIGKILL");
+        return;
+      }
+      const accepted = chunk.subarray(0, remaining);
+      parts.push(accepted);
+      outputBytes += accepted.byteLength;
+      if (accepted.byteLength < chunk.byteLength) {
+        transportStatus = "output_limit";
+        child.kill("SIGKILL");
+      }
+    };
+
+    child.stdout!.on("data", (chunk: Buffer) => appendOutput(stdoutParts, chunk));
+    child.stderr!.on("data", (chunk: Buffer) => appendOutput(stderrParts, chunk));
+
+    const timer = setTimeout(() => {
+      transportStatus = "timed_out";
+      child.kill("SIGKILL");
+    }, timeoutMs);
 
     child.on("error", (err: Error) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       const code = (err as { code?: string }).code ?? "UNKNOWN";
       resolve({ ok: false, kind: "spawn", code, message: err.message });
     });
 
     child.on("close", (code) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       const stdout = Buffer.concat(stdoutParts).toString("utf8");
       const stderr = Buffer.concat(stderrParts).toString("utf8");
+      if (transportStatus !== null) {
+        resolve({
+          ok: false,
+          kind: "transport",
+          status: transportStatus,
+          code: transportStatus === "timed_out" ? "ETIMEDOUT" : "EOUTPUTLIMIT",
+          message:
+            transportStatus === "timed_out"
+              ? `bd command timed out after ${timeoutMs}ms`
+              : `bd command output exceeded ${MAX_BD_OUTPUT_BYTES} bytes`,
+          stdout,
+          stderr,
+        });
+        return;
+      }
       if (code !== 0) {
         resolve({ ok: false, kind: "exit", code: code ?? -1, stdout, stderr });
         return;

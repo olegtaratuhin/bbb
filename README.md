@@ -21,6 +21,11 @@ same project and host context as bb, including bb Connect sessions.
 - Host-correct execution when a project is stored on another machine.
 - Cached loading and responsive layouts designed for split panes and phones.
 
+The dependency graph is read-only. The plugin currently supports creating
+issues and editing title, description, acceptance criteria, status, and
+priority. Use `bd` directly for deletion, labels, assignees, dependencies,
+metadata, notes, and Dolt synchronization.
+
 ## Install
 
 Requirements:
@@ -86,6 +91,10 @@ and have `bd` on its `PATH`.
 Projects without `.beads` offer a confirmed setup action. Selecting a project
 never initializes it silently.
 
+Setup runs `bd init --non-interactive --init-if-missing --skip-agents
+--skip-hooks` on the selected host. It creates the local Beads workspace and
+database, but deliberately does not install agent instructions or Git hooks.
+
 Optional settings are available under the plugin's bb settings page:
 
 - **Project override** selects a specific bb project.
@@ -100,6 +109,11 @@ empty for projects stored on an enrolled remote host.
 Plain text remains an ordinary search. Structured-query mode starts when the
 input contains query syntax such as an operator, boolean keyword, or
 parenthesis.
+
+Plain search performs one case-insensitive contiguous substring match across
+the issue ID, title, and description. It does not tokenize words or search
+notes. Query syntax is the boundary for structured search; for example,
+`login fix` is plain search while `status=open` is a validated query.
 
 ```text
 status=open

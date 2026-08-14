@@ -22,8 +22,12 @@
   ],
   "files": [
     "dist",
+    "*.ts",
+    "*.tsx",
     "server.ts",
     "app.tsx",
+    "components.json",
+    "tsconfig.json",
     "components",
     "hooks",
     "lib",
