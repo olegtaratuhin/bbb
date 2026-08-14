@@ -60,18 +60,28 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+npm ci
+npm test
+npm run test:compat
+npm run typecheck
+bb plugin build
 ```
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+The plugin is a root-installable BB package. `server.ts` exposes a JSON RPC
+bridge to the `bd` CLI and routes project-backed commands to the owning host.
+`app.tsx` renders the project panel and consumes that contract. `query-core/`
+contains the React- and BB-independent query lexer, parser, validation,
+completion, highlighting, and mobile-assistance model. Vendored UI sources are
+under `components/`.
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- Keep `bd` as the source of truth; do not read `.beads/dolt` or JSONL exports
+  directly.
+- Preserve project host routing for remote bb clients.
+- Keep query grammar logic in `query-core/` and cover public behavior with
+  focused tests.
+- Use host theme tokens and the vendored BB UI primitives for new surfaces.
