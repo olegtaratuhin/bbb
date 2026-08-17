@@ -71,12 +71,15 @@ The default surface is Kanban. The main views are:
 - The right-hand epic drawer for navigating containers without losing the
   current issue scope.
 
-When publishing UI changes, add sanitized screenshots to
-`docs/screenshots/` and link them from this section. Use a project with
-synthetic issues; never capture private task descriptions, paths, or
-credentials. The current source checkout was prepared without a browser
-capture runtime, so the first release should add this visual proof before
-publishing if a live screenshot is available.
+When publishing UI changes, add reviewed screenshots to `docs/screenshots/`
+and link them from this section. These captures show the current Beads panel
+in the BB desktop app:
+
+![Beads Kanban view](docs/screenshots/kanban.jpg)
+![Beads list view](docs/screenshots/list.jpg)
+
+See the [complete visual set](docs/screenshots/README.md) for the graph view,
+capture details, and the current mobile-capture limitation.
 
 ## Project and host selection
 
@@ -135,6 +138,26 @@ contracts and supported grammar.
 Invalid structured queries are rejected before the plugin invokes `bd`. This
 prevents malformed input from being silently treated as free-text search.
 
+### Mobile query assistance
+
+On a narrow or coarse-pointer surface, choose **Quick filters** beside the
+query field. The assistant offers built-in presets, recent valid queries, and
+a structured builder. Builder rows are serialized into the same query text as
+raw editing, so the expression shown in the field is always the expression
+sent to `bd`.
+
+Raw editing remains available for advanced users. Incomplete or invalid
+structured input is kept editable and cannot be submitted until its diagnostic
+is fixed. Recent queries are local-only, capped at eight entries, and can be
+removed individually; empty, invalid, and duplicate entries are not stored.
+Completion waits for IME composition to finish, touch targets are at least 44
+CSS pixels, and the assistant accounts for safe-area and keyboard occlusion.
+
+The implementation contract, adapter guidance, valid/invalid examples, and
+release gates are documented in
+[`beads-query-language/README.md`](beads-query-language/README.md) and the
+[mobile query-assistance release checklist](docs/mobile-query-assistance.md).
+
 ## Development
 
 ```sh
@@ -161,6 +184,10 @@ be installed from GitHub without depending on bb's private source tree.
 The test suite covers the query core, CLI/RPC normalization, host routing,
 project selection, cache and loading behavior, responsive toolbar structure,
 dependency graph projections, and focused React interactions.
+
+For release validation ownership and the distinction between automated,
+browser, device, and remote-host checks, see
+[`docs/mobile-query-assistance.md`](docs/mobile-query-assistance.md).
 
 ## Troubleshooting
 

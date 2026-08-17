@@ -195,7 +195,7 @@ Run the full validation suite (lexer, parser, schema validation, completion,
 highlighting) without building the plugin or invoking `bd`:
 
 ```sh
-cd bb-plugin-beads
+# Run from the repository root.
 npm test -- --reporter=verbose beads-query-language
 ```
 
