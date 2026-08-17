@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import {
@@ -82,14 +83,16 @@ import {
   writeStoredBeadsProjectId,
 } from "../beads/project-context";
 import { chooseDefaultBeadsProject } from "../beads/project-selection";
+import {
+  applyIssueStatus,
+  KANBAN_STATUSES,
+  kanbanDropStatus,
+  kanbanStatus,
+  type KanbanDropTarget,
+  type KanbanStatus,
+} from "../ui/kanban-board";
 
-const STATUSES = [
-  "open",
-  "in_progress",
-  "blocked",
-  "deferred",
-  "closed",
-] as const;
+const STATUSES = KANBAN_STATUSES;
 const ISSUE_TYPES = [
   "task",
   "bug",
@@ -101,6 +104,7 @@ const ISSUE_TYPES = [
 type IssueStatus = (typeof STATUSES)[number];
 const OTHER_STATUS = "__other" as const;
 type BoardStatus = IssueStatus | typeof OTHER_STATUS;
+const DRAG_THRESHOLD_PX = 5;
 type SortMode =
   | "manual"
   | "priority_desc"
@@ -116,37 +120,42 @@ type EpicSortMode =
 
 const STATUS_CONFIG: Record<
   IssueStatus,
-  { label: string; dot: string; badge: string; header: string }
+  { label: string; dot: string; badge: string; header: string; card: string }
 > = {
   open: {
     label: "Open",
     dot: "bg-sky-500",
     badge: "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800",
     header: "border-t-sky-500",
+    card: "border-l-sky-500",
   },
   in_progress: {
     label: "In Progress",
     dot: "bg-amber-500",
     badge: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
     header: "border-t-amber-500",
+    card: "border-l-amber-500",
   },
   blocked: {
     label: "Blocked",
     dot: "bg-red-500",
     badge: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800",
     header: "border-t-red-500",
+    card: "border-l-red-500",
   },
   deferred: {
     label: "Deferred",
     dot: "bg-zinc-400",
     badge: "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-900/60 dark:text-zinc-300 dark:border-zinc-700",
     header: "border-t-zinc-400",
+    card: "border-l-zinc-400",
   },
   closed: {
     label: "Closed",
     dot: "bg-emerald-500",
     badge: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
     header: "border-t-emerald-500",
+    card: "border-l-emerald-500",
   },
 };
 
@@ -156,6 +165,7 @@ const OTHER_STATUS_CONFIG = {
   badge:
     "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800",
   header: "border-t-violet-500",
+  card: "border-l-violet-500",
 };
 
 const COLUMN_COUNT_BADGE_CLASS =
@@ -567,42 +577,119 @@ function IssueRow({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
   );
 }
 
-function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
+function IssueCard({
+  issue,
+  onOpen,
+  onStatusChange,
+  onPointerDown,
+  cardRef,
+  dragging = false,
+  pending = false,
+}: {
+  issue: Issue;
+  onOpen: () => void;
+  onStatusChange: (status: KanbanStatus) => void;
+  onPointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  cardRef?: (element: HTMLDivElement | null) => void;
+  dragging?: boolean;
+  pending?: boolean;
+}) {
+  const config =
+    STATUS_CONFIG[issue.status as IssueStatus] ?? OTHER_STATUS_CONFIG;
+  const isKnownStatus = KANBAN_STATUSES.includes(issue.status as KanbanStatus);
+
   return (
-    <button
-      type="button"
-      className="w-full cursor-pointer rounded-md border border-border bg-card p-2.5 text-left transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      onClick={onOpen}
+    <div
+      ref={cardRef}
+      onPointerDown={onPointerDown}
+      aria-busy={pending}
+      aria-grabbed={dragging}
+      className={`group w-full touch-none select-none rounded-md border border-border border-l-2 bg-card p-2.5 text-left transition-colors hover:bg-state-hover ${
+        dragging ? "opacity-40 cursor-grabbing" : "cursor-grab"
+      } ${config.card}`}
     >
-      <span className="mb-1 block truncate text-xs text-muted-foreground">
-        {issue.id}
-      </span>
-      <span className="mb-2 block line-clamp-2 text-sm font-medium">
-        {issue.title}
-      </span>
-      <span className="flex items-center gap-2">
-        {issue.issue_type ? (
-          <span className="rounded bg-muted px-1.5 py-0.5 text-xs capitalize text-muted-foreground">
-            {issue.issue_type}
+      <div className="mb-1 flex min-w-0 items-center gap-1.5">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={onOpen}
+          aria-label={`Open ${issue.id}: ${issue.title}`}
+        >
+          <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 truncate text-[11px] font-mono text-muted-foreground">
+            {issue.id}
           </span>
-        ) : null}
-        <AgentBadge issue={issue} />
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <PriorityIcon priority={issue.priority} className="h-3 w-3" />
-          P{issue.priority ?? 2}
+          <span className="sr-only">{statusLabel(issue.status)}</span>
+          {issue.issue_type ? (
+            <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs capitalize text-muted-foreground">
+              {issue.issue_type}
+            </span>
+          ) : null}
+        </button>
+        <select
+          aria-label={`Move ${issue.id} to status`}
+          className="h-6 max-w-24 shrink-0 rounded border border-transparent bg-transparent px-1 text-[11px] text-muted-foreground outline-none hover:border-border focus-visible:border-input focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          value={isKnownStatus ? issue.status : ""}
+          disabled={pending}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            event.stopPropagation();
+            const nextStatus = event.target.value as KanbanStatus;
+            if (KANBAN_STATUSES.includes(nextStatus)) {
+              onStatusChange(nextStatus);
+            }
+          }}
+        >
+          {!isKnownStatus ? <option value="">Other</option> : null}
+          {KANBAN_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {statusLabel(status)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="button"
+        className="block w-full rounded text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        onClick={onOpen}
+        aria-label={`Open ${issue.id}: ${issue.title}`}
+      >
+        <span className="mb-2 block line-clamp-2 text-sm font-medium">
+          {issue.title}
         </span>
-      </span>
-    </button>
+        <span className="flex items-center gap-2">
+          <AgentBadge issue={issue} />
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <PriorityIcon priority={issue.priority} className="h-3 w-3" />
+            P{issue.priority ?? 2}
+          </span>
+        </span>
+      </button>
+    </div>
   );
 }
 
 function KanbanColumnBody({
   issues,
   onOpenIssue,
+  onStatusChange,
+  onPointerDown,
+  cardRef,
+  draggingIssueId,
+  pendingIssueIds,
   status,
 }: {
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
+  onStatusChange: (issueId: string, status: KanbanStatus) => Promise<void>;
+  onPointerDown: (
+    event: ReactPointerEvent<HTMLDivElement>,
+    issue: Issue,
+  ) => void;
+  cardRef: (issueId: string, element: HTMLDivElement | null) => void;
+  draggingIssueId: string | null;
+  pendingIssueIds: ReadonlySet<string>;
   status: BoardStatus;
 }) {
   const config = status === OTHER_STATUS ? OTHER_STATUS_CONFIG : STATUS_CONFIG[status];
@@ -614,6 +701,11 @@ function KanbanColumnBody({
             key={issue.id}
             issue={issue}
             onOpen={() => onOpenIssue(issue)}
+            onStatusChange={(nextStatus) => onStatusChange(issue.id, nextStatus)}
+            onPointerDown={(event) => onPointerDown(event, issue)}
+            cardRef={(element) => cardRef(issue.id, element)}
+            dragging={draggingIssueId === issue.id}
+            pending={pendingIssueIds.has(issue.id)}
           />
         ))
       ) : (
@@ -628,10 +720,27 @@ function KanbanColumnBody({
 function KanbanColumn({
   issues,
   onOpenIssue,
+  onStatusChange,
+  onPointerDown,
+  cardRef,
+  draggingIssueId,
+  pendingIssueIds,
+  columnRef,
+  dragOver = false,
   status,
 }: {
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
+  onStatusChange: (issueId: string, status: KanbanStatus) => Promise<void>;
+  onPointerDown: (
+    event: ReactPointerEvent<HTMLDivElement>,
+    issue: Issue,
+  ) => void;
+  cardRef: (issueId: string, element: HTMLDivElement | null) => void;
+  draggingIssueId: string | null;
+  pendingIssueIds: ReadonlySet<string>;
+  columnRef: (status: BoardStatus, element: HTMLDetailsElement | null) => void;
+  dragOver?: boolean;
   status: BoardStatus;
 }) {
   const config = status === OTHER_STATUS ? OTHER_STATUS_CONFIG : STATUS_CONFIG[status];
@@ -656,9 +765,12 @@ function KanbanColumn({
 
   return (
     <details
+      ref={(element) => columnRef(status, element)}
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
-      className="group snap-start @md:flex @md:flex-1 @md:min-w-[10rem] @md:flex-col @md:gap-2"
+      className={`group snap-start @md:flex @md:flex-1 @md:min-w-[10rem] @md:flex-col @md:gap-2 ${
+        dragOver ? "rounded-md bg-state-selected/40 outline-2 outline-dashed outline-input" : ""
+      }`}
     >
       <summary
         className={`${headerClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
@@ -669,6 +781,11 @@ function KanbanColumn({
         <KanbanColumnBody
           issues={issues}
           onOpenIssue={onOpenIssue}
+          onStatusChange={onStatusChange}
+          onPointerDown={onPointerDown}
+          cardRef={cardRef}
+          draggingIssueId={draggingIssueId}
+          pendingIssueIds={pendingIssueIds}
           status={status}
         />
       </div>
@@ -679,54 +796,267 @@ function KanbanColumn({
 function KanbanBoard({
   issues,
   onOpenIssue,
+  onStatusChange,
   visibleColumns,
 }: {
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
+  onStatusChange: (issueId: string, status: KanbanStatus) => Promise<void>;
   visibleColumns: readonly BoardStatus[];
 }) {
+  const [boardIssues, setBoardIssues] = useState(issues);
+  const boardIssuesRef = useRef(boardIssues);
+  boardIssuesRef.current = boardIssues;
+  const [drag, setDrag] = useState<{
+    issueId: string;
+    x: number;
+    y: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    overStatus: KanbanStatus | null;
+  } | null>(null);
+  const [pendingIssueIds, setPendingIssueIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [announcement, setAnnouncement] = useState("");
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const columnRefs = useRef(
+    new Map<BoardStatus, Set<HTMLDetailsElement>>(),
+  );
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const suppressClickRef = useRef(false);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    setBoardIssues(issues);
+  }, [issues]);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
+
   const columns = useMemo(() => {
     const map = new Map<BoardStatus, Issue[]>();
     visibleColumns.forEach((s) => map.set(s, []));
-    issues.forEach((issue) => {
-      const bucket = STATUSES.includes(issue.status as IssueStatus)
-        ? (issue.status as IssueStatus)
-        : OTHER_STATUS;
+    boardIssues.forEach((issue) => {
+      const bucket = kanbanStatus(issue.status) as BoardStatus;
       if (map.has(bucket)) {
         map.get(bucket)!.push(issue);
       }
     });
     return map;
-  }, [issues, visibleColumns]);
+  }, [boardIssues, visibleColumns]);
+
+  const setPending = (issueId: string, pending: boolean) => {
+    setPendingIssueIds((current) => {
+      const next = new Set(current);
+      if (pending) next.add(issueId);
+      else next.delete(issueId);
+      return next;
+    });
+  };
+
+  const moveIssue = async (issueId: string, status: KanbanStatus): Promise<void> => {
+    const current = boardIssuesRef.current;
+    const issue = current.find((item) => item.id === issueId);
+    if (!issue || issue.status === status || pendingIssueIds.has(issueId)) return;
+    const previousStatus = issue.status;
+    setBoardIssues(applyIssueStatus(current, issueId, status));
+    setPending(issueId, true);
+    setAnnouncement(`${issue.id} moved to ${statusLabel(status)}.`);
+    try {
+      await onStatusChange(issueId, status);
+      setPending(issueId, false);
+    } catch (cause) {
+        setBoardIssues((latest) =>
+          latest.map((item) =>
+            item.id === issueId ? { ...item, status: previousStatus } : item,
+          ),
+        );
+        setPending(issueId, false);
+        setAnnouncement(
+          `${issue.id} could not be moved: ${cause instanceof Error ? cause.message : "update failed"}.`,
+        );
+    }
+  };
+
+  const findDropStatus = (x: number, y: number): KanbanStatus | null => {
+    const boardRect = boardRef.current?.getBoundingClientRect();
+    if (
+      boardRect &&
+      (y < boardRect.top - 8 || y > boardRect.bottom + 8 || x < boardRect.left || x > boardRect.right)
+    ) {
+      return null;
+    }
+    const targets: KanbanDropTarget[] = [];
+    for (const status of visibleColumns) {
+      if (status === OTHER_STATUS) continue;
+      const elements = columnRefs.current.get(status);
+      if (!elements) continue;
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        targets.push({
+          status,
+          left: rect.left - 6,
+          right: rect.right + 6,
+          top: rect.top,
+          bottom: rect.bottom,
+        });
+      }
+    }
+    return kanbanDropStatus(targets, x, y);
+  };
+
+  const handleCardPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    issue: Issue,
+  ) => {
+    if (event.button !== 0 || pendingIssueIds.has(issue.id) || dragCleanupRef.current) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const start = {
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      width: rect.width,
+    };
+    let active = false;
+    const updateDrag = (moveEvent: PointerEvent) => {
+      setDrag({
+        issueId: issue.id,
+        x: moveEvent.clientX,
+        y: moveEvent.clientY,
+        offsetX: start.offsetX,
+        offsetY: start.offsetY,
+        width: start.width,
+        overStatus: findDropStatus(moveEvent.clientX, moveEvent.clientY),
+      });
+    };
+    const onMove = (moveEvent: PointerEvent) => {
+      if (!active) {
+        const distance = Math.hypot(moveEvent.clientX - start.x, moveEvent.clientY - start.y);
+        if (distance < DRAG_THRESHOLD_PX) return;
+        active = true;
+      }
+      moveEvent.preventDefault();
+      updateDrag(moveEvent);
+    };
+    const finish = (upEvent: PointerEvent | null) => {
+      dragCleanupRef.current?.();
+      dragCleanupRef.current = null;
+      if (!active) return;
+      if (upEvent) {
+        const target = findDropStatus(upEvent.clientX, upEvent.clientY);
+        if (target) void moveIssue(issue.id, target);
+      }
+      setDrag(null);
+      suppressClickRef.current = true;
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    };
+    const onUp = (upEvent: PointerEvent) => finish(upEvent);
+    const onCancel = () => finish(null);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    dragCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    };
+  };
+
+  const boardColumns = Array.from(columns.entries());
+  const draggedIssue = drag
+    ? boardIssues.find((issue) => issue.id === drag.issueId)
+    : undefined;
+  const openIssue = (issue: Issue) => {
+    if (!suppressClickRef.current) onOpenIssue(issue);
+  };
 
   return (
     <>
-      <div
-        className="hidden overflow-x-auto pb-2 @md:block"
-        role="region"
-        aria-label="Kanban board"
-      >
-        <div className="mx-auto flex w-full min-w-[52rem] max-w-none snap-x snap-mandatory gap-2">
-          {visibleColumns.map((status) => (
+      <div ref={boardRef} role="region" aria-label="Kanban board">
+        <div className="hidden overflow-x-auto pb-2 @md:block">
+        <div className={`mx-auto flex w-full min-w-[52rem] max-w-none snap-x snap-mandatory gap-2 ${drag ? "cursor-grabbing" : ""}`}>
+          {boardColumns.map(([status, statusIssues]) => (
             <KanbanColumn
               key={status}
-              issues={columns.get(status) ?? []}
-              onOpenIssue={onOpenIssue}
+              issues={statusIssues}
+              onOpenIssue={openIssue}
+              onStatusChange={moveIssue}
+              onPointerDown={handleCardPointerDown}
+              cardRef={(issueId, element) => {
+                if (element) cardRefs.current.set(issueId, element);
+                else cardRefs.current.delete(issueId);
+              }}
+              draggingIssueId={drag?.issueId ?? null}
+              pendingIssueIds={pendingIssueIds}
+              dragOver={drag?.overStatus === status}
+              columnRef={(columnStatus, element) => {
+                const elements = columnRefs.current.get(columnStatus) ?? new Set();
+                if (element) elements.add(element);
+                else {
+                  for (const candidate of elements) {
+                    if (!candidate.isConnected) elements.delete(candidate);
+                  }
+                }
+                if (elements.size > 0) columnRefs.current.set(columnStatus, elements);
+                else columnRefs.current.delete(columnStatus);
+              }}
               status={status}
             />
           ))}
         </div>
-      </div>
-      <div className="flex flex-col gap-2 @md:hidden">
-        {visibleColumns.map((status) => (
+        </div>
+        <div className={`flex flex-col gap-2 @md:hidden ${drag ? "cursor-grabbing" : ""}`}>
+        {boardColumns.map(([status, statusIssues]) => (
           <KanbanColumn
             key={status}
-            issues={columns.get(status) ?? []}
-            onOpenIssue={onOpenIssue}
+            issues={statusIssues}
+            onOpenIssue={openIssue}
+            onStatusChange={moveIssue}
+            onPointerDown={handleCardPointerDown}
+            cardRef={(issueId, element) => {
+              if (element) cardRefs.current.set(issueId, element);
+              else cardRefs.current.delete(issueId);
+            }}
+            draggingIssueId={drag?.issueId ?? null}
+            pendingIssueIds={pendingIssueIds}
+            dragOver={drag?.overStatus === status}
+            columnRef={(columnStatus, element) => {
+              const elements = columnRefs.current.get(columnStatus) ?? new Set();
+              if (element) elements.add(element);
+              else {
+                for (const candidate of elements) {
+                  if (!candidate.isConnected) elements.delete(candidate);
+                }
+              }
+              if (elements.size > 0) columnRefs.current.set(columnStatus, elements);
+              else columnRefs.current.delete(columnStatus);
+            }}
             status={status}
           />
         ))}
+        </div>
       </div>
+      {drag && draggedIssue ? (
+        <div
+          className="pointer-events-none fixed z-50"
+          style={{
+            left: drag.x - drag.offsetX,
+            top: drag.y - drag.offsetY,
+            width: drag.width,
+          }}
+        >
+          <IssueCard
+            issue={draggedIssue}
+            onOpen={() => undefined}
+            onStatusChange={() => undefined}
+            dragging
+          />
+        </div>
+      ) : null}
+      <div className="sr-only" aria-live="polite">{announcement}</div>
     </>
   );
 }
@@ -2413,6 +2743,35 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     }
   }
 
+  async function updateIssueForId(
+    issueId: string,
+    input: {
+      status?: IssueStatus;
+      priority?: number;
+      title?: string;
+      description?: string;
+      acceptance?: string;
+    },
+  ) {
+    setError(null);
+    try {
+      await rpc.call("updateIssue", {
+        ...(effectiveRpcProjectId ? { projectId: effectiveRpcProjectId } : {}),
+        id: issueId,
+        ...input,
+      });
+      invalidateIssueCache();
+      setRefresh((value) => value + 1);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to update issue");
+      throw cause;
+    }
+  }
+
+  async function updateIssueStatus(issueId: string, status: KanbanStatus) {
+    await updateIssueForId(issueId, { status });
+  }
+
   async function updateIssue(input: {
     status?: IssueStatus;
     priority?: number;
@@ -2423,17 +2782,10 @@ function BeadsPanel({ subPath }: { subPath: string }) {
     if (!selectedId) {
       return;
     }
-    setError(null);
     try {
-      await rpc.call("updateIssue", {
-        ...(effectiveRpcProjectId ? { projectId: effectiveRpcProjectId } : {}),
-        id: selectedId,
-        ...input,
-      });
-      invalidateIssueCache();
-      setRefresh((value) => value + 1);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to update issue");
+      await updateIssueForId(selectedId, input);
+    } catch {
+      // The detail editor reports errors in the panel-level error card.
     }
   }
 
@@ -2689,6 +3041,7 @@ function BeadsPanel({ subPath }: { subPath: string }) {
             <KanbanBoard
               issues={visibleIssues}
               onOpenIssue={openIssue}
+              onStatusChange={updateIssueStatus}
               visibleColumns={visibleColumns}
             />
           ) : viewMode === "list" ? (

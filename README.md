@@ -16,6 +16,8 @@ same project and host context as bb, including bb Connect sessions.
   of maintaining a second hidden filter state.
 - Touch-friendly query assistance for narrow and remote clients.
 - Issue detail editing, issue creation, status/priority changes, and refresh.
+- Kanban status transitions by dragging a card onto a column, with a status
+  selector for keyboard and touch users.
 - Project selection across all bb projects, including a guided `bd init` flow
   for projects that do not have Beads yet.
 - Host-correct execution when a project is stored on another machine.
